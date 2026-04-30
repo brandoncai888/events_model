@@ -159,3 +159,26 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
         
     print("Click on the animation window to pause/resume.")
     plt.show()
+
+if __name__ == "__main__":
+    SENSOR_WIDTH = 346
+    SENSOR_HEIGHT = 260
+    SIM_DURATION = 10.0      
+    LAMBDA_RATE = 1.0       
+    
+    # Load the event data from the CSV file generated in the previous step
+    filename = f"poisson_noise_{LAMBDA_RATE}Hz_{SIM_DURATION}s.csv"
+    event_data = pd.read_csv(filename)
+    
+    animate_event_stream(
+        df=event_data, 
+        start_t=0.0,
+        end_t=SIM_DURATION, 
+        fps=30,
+        width=SENSOR_WIDTH, 
+        height=SENSOR_HEIGHT,
+        p_col='p',           
+        color_events=True,
+        show_legend=False,
+        save_path = f"poisson_noise_{LAMBDA_RATE}Hz_{SIM_DURATION}s_animation.mp4"
+    )

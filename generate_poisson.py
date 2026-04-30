@@ -26,11 +26,11 @@ if __name__ == "__main__":
     SENSOR_WIDTH = 346
     SENSOR_HEIGHT = 260
     SIM_DURATION = 10.0      
-    LAMBDA_RATE = 5.0       
-    
+    LAMBDA_RATE = 1.0       
+    SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
     # Generating data with 14 arbitrary distinct classes in the 'p' column
     event_data = generate_poisson_noise(SENSOR_WIDTH, SENSOR_HEIGHT, SIM_DURATION, LAMBDA_RATE)
-    event_data.to_csv(f"poisson_noise_{LAMBDA_RATE}.csv", index=False)
+    event_data.to_csv(f"poisson_noise_{SUFFIX}.csv", index=False)
 
     # Visualize using the dynamic color generator, but turning the legend OFF
     # visualize_single_slice_scatter(
@@ -53,5 +53,5 @@ if __name__ == "__main__":
         p_col='p',           
         color_events=True,
         show_legend=False,
-        save_path = f"poisson_noise_{LAMBDA_RATE}_animation.mp4"
+        save_path = f"poisson_noise_{SUFFIX}_animation.mp4"
     ) 
