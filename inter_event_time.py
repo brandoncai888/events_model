@@ -48,13 +48,16 @@ def load_iet_grid(filename="iet_grid.pkl"):
 
 if __name__ == "__main__":
     # Example dimensions (e.g., DAVIS346)
-    W, H = 346, 260
+    W, H = 346, 260      
+    filename = "poisson_noise_5.0.csv"  # Adjust as needed
     
+    event_data = pd.read_csv(filename)
+
     # Assuming 'event_data' is your DataFrame from previous steps
     iet_spatial_grid = create_iet_grid(event_data, W, H)
     
     # Save it so you don't have to re-process the CSV next time
-    save_iet_grid(iet_spatial_grid, "my_event_analysis.pkl")
+    save_iet_grid(iet_spatial_grid, filename[:-4] + ".pkl")
 
     # --- Example Analysis Usage ---
     # To get the 5th inter-event time at pixel x=10, y=20:

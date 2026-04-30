@@ -17,7 +17,6 @@ def generate_poisson_noise(width, height, duration, lambda_hz):
     p = np.random.choice([0, 1], n_events)
 
     df = pd.DataFrame({'x': x, 'y': y, 't': t, 'p': p})
-    df['t'] = df['t'].round(6)
     
     print(f"Generated {n_events:,} events in {time.time() - start_time:.2f} seconds.")
     return df
@@ -26,7 +25,7 @@ def generate_poisson_noise(width, height, duration, lambda_hz):
 if __name__ == "__main__":
     SENSOR_WIDTH = 346
     SENSOR_HEIGHT = 260
-    SIM_DURATION = 5.0      
+    SIM_DURATION = 10.0      
     LAMBDA_RATE = 5.0       
     
     # Generating data with 14 arbitrary distinct classes in the 'p' column
