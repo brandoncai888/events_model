@@ -1,7 +1,32 @@
+from html import parser
+
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
-
+import math
 from inter_event_time import load_iet_grid
+import argparse
+import sys
+
+
+def save_binned_values_csv(save_path, bin_edges, data_values, expected_values):
+    """
+    Saves plotted binned values to CSV.
+
+    bin, left, and right are stored as log10-transformed positions.
+    """
+    csv_path = save_path + '.csv'
+    log_left = np.log10(bin_edges[:-1])
+    log_right = np.log10(bin_edges[1:])
+    log_centers = (log_left + log_right) / 2.0
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['bin', 'left', 'right', 'data', 'expected'])
+        for center, left, right, data, expected in zip(
+            log_centers, log_left, log_right, data_values, expected_values
+        ):
+            writer.writerow([center, left, right, data, expected])
+    print(f"CSV saved successfully to {csv_path}")
 
 def calculate_pixel_frequencies(grid):
     """
@@ -28,10 +53,20 @@ def calculate_pixel_frequencies(grid):
                     
     return freq_map
 
-def plot_frequency_pdf(freq_map, bins=100, color='coral', min=None, max=None, save_path=None):
+def plot_frequency_pdf(
+    freq_map,
+    bins=100,
+    color='coral',
+    min=None,
+    max=None,
+    expected_rate=None,
+    expected_std_dev=None,
+    save_path=None,
+    suppress_show=False
+):
     """
     Graphs the Probability Density Function (PDF) of pixel frequencies.
-    Uses a log scale for both the X-axis (Frequency) and Y-axis (Density).
+    Uses a log scale for the X-axis (Frequency).
 
     Args:
         freq_map: 2D NumPy array of pixel frequencies.
@@ -39,6 +74,8 @@ def plot_frequency_pdf(freq_map, bins=100, color='coral', min=None, max=None, sa
         color: Plot color.
         min: Minimum frequency for bin range.
         max: Maximum frequency for bin range.
+        expected_rate: Optional rate used for Gaussian curve overlay.
+        expected_std_dev: Optional standard deviation for Gaussian curve overlay.
         save_path: Optional path to save the resulting plot image.
     """
     print("Generating PDF of average pixel frequencies...")
@@ -62,22 +99,44 @@ def plot_frequency_pdf(freq_map, bins=100, color='coral', min=None, max=None, sa
     bin_edges = np.logspace(np.log10(min_val), np.log10(max_val), num=bins)
     
     # density=True converts counts to probability density
-    # log=True automatically sets the Y-axis to a logarithmic scale
-    plt.hist(valid_freqs, bins=bin_edges, density=True, log=False, color=color, edgecolor='black', alpha=0.8)
-    
+    data_density, _, _ = plt.hist(valid_freqs, bins=bin_edges, density=True, log=False, color=color, edgecolor='black', alpha=0.8)
+    expected_density = np.full_like(data_density, np.nan, dtype=float)
+
+    if expected_rate is not None and expected_std_dev is not None:
+        rate = expected_rate
+        std_dev = expected_std_dev
+        if std_dev <= 0:
+            print("Expected Gaussian curve skipped: expected_std_dev must be positive.")
+        else:
+            bin_centers = np.sqrt(bin_edges[:-1] * bin_edges[1:])
+            bin_widths = np.diff(bin_edges)
+            z_left = (bin_edges[:-1] - rate) / (std_dev * np.sqrt(2.0))
+            z_right = (bin_edges[1:] - rate) / (std_dev * np.sqrt(2.0))
+            cdf_left = 0.5 * (1.0 + np.array([math.erf(z) for z in z_left]))
+            cdf_right = 0.5 * (1.0 + np.array([math.erf(z) for z in z_right]))
+            expected_bin_areas = cdf_right - cdf_left
+            expected_density = expected_bin_areas / bin_widths
+
+            label = f'Expected Gaussian (mu={rate}, sigma={std_dev:.3g})'
+
+            plt.plot(bin_centers, expected_density, color='orange', lw=2, linestyle='--', label=label)
+            plt.legend()
+
     # Set X-axis to logarithmic scale
     plt.xscale('log')
-    
+
     plt.title("PDF of Average Pixel Frequencies")
     plt.xlabel("Average Frequency (Hz) [Log Scale]")
-    plt.ylabel("Probability Density [Log Scale]")
+    plt.ylabel("Probability Density")
     
     plt.grid(True, which="both", ls="--", alpha=0.4)
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        print(f"Image saved successfully to {save_path}")
-    plt.show()
+        save_binned_values_csv(save_path, bin_edges, data_density, expected_density)
+        plt.savefig(save_path+'.png', dpi=300, bbox_inches='tight')
+        print(f"Image saved successfully to {save_path+'.png'}")
+    if not suppress_show:
+        plt.show()
 
 def plot_overall_iet_histogram(
     grid,
@@ -88,6 +147,7 @@ def plot_overall_iet_histogram(
     expected_rate=None,
     expected_total=None,
     save_path=None,
+    suppress_show=False
 ):
     """
     Graphs the overall histogram of ALL inter-event times across the entire sensor.
@@ -129,7 +189,8 @@ def plot_overall_iet_histogram(
         min_val, max_val = valid_iets.min(), valid_iets.max()
     bin_edges = np.logspace(np.log10(min_val), np.log10(max_val), num=bins)
     
-    plt.hist(valid_iets, bins=bin_edges, log=False, color=color, edgecolor='black', alpha=0.8)
+    data_counts, _, _ = plt.hist(valid_iets, bins=bin_edges, log=False, color=color, edgecolor='black', alpha=0.8)
+    expected_counts = np.full_like(data_counts, np.nan, dtype=float)
     
     if expected_rate is not None and expected_total is not None:
         rate = expected_rate
@@ -138,7 +199,7 @@ def plot_overall_iet_histogram(
             np.exp(-rate * bin_edges[:-1]) - np.exp(-rate * bin_edges[1:])
         )
 
-        label = f'Expected exponential (lambda={rate})'
+        label = f'Expected exponential (lambda={rate}, total={expected_total})'
 
         plt.plot(bin_centers, expected_counts, color='orange', lw=2, linestyle='--', label=label)
         plt.legend()
@@ -149,40 +210,57 @@ def plot_overall_iet_histogram(
     
     plt.title("Overall Distribution of Inter-Event Times (All Pixels)")
     plt.xlabel("Inter-Event Time (Seconds) [Log Scale]")
-    plt.ylabel("Event Count [Log Scale]")
+    plt.ylabel("Event Count")
     
     plt.grid(True, which="both", ls="--", alpha=0.4)
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        print(f"Image saved successfully to {save_path}")
-    plt.show()
+        save_binned_values_csv(save_path, bin_edges, data_counts, expected_counts)
+        plt.savefig(save_path+'.png', dpi=300, bbox_inches='tight')
+        print(f"Image saved successfully to {save_path+'.png'}")
+    if not suppress_show:
+        plt.show()
 
-if __name__ == "__main__":
-    SENSOR_WIDTH = 346
-    SENSOR_HEIGHT = 260
-    SIM_DURATION = 10.0      
-    LAMBDA_RATE = 1.0  
+if __name__ == "__main__": 
+    suppress_show = len(sys.argv) > 1
+
+    parser = argparse.ArgumentParser(description="Generate Poisson noise event data.")
+    parser.add_argument("--rate", type=float, default=1.0, help="Poisson event rate per pixel in Hz.")
+    parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
+    parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
+    parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
+    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: current directory).")
+    args = parser.parse_args()
+
+    SENSOR_WIDTH = args.width
+    SENSOR_HEIGHT = args.height
+    SIM_DURATION = args.duration
+    LAMBDA_RATE = args.rate
     SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
+    MIN_TIME = 1e-6 # minimum IET due to typical numerical precision limits
+    num_bins = int(math.log10(SIM_DURATION / MIN_TIME) * 20 + 1.5)  # 20 bins per decade
+
     # Assuming 'iet_spatial_grid' is the 2D array of lists created in the previous step
-    iet_spatial_grid = load_iet_grid(f"poisson_noise_{SUFFIX}_iet.pkl")
+    iet_spatial_grid = load_iet_grid(f"{args.folder}/poisson_noise_{SUFFIX}_iet.pkl")
     
-    # 1. Calculate the frequency map
+    # Graph the Frequency PDF
     freq_map = calculate_pixel_frequencies(iet_spatial_grid)
+    plot_frequency_pdf(
+        freq_map, bins=81, color='red', 
+        min=LAMBDA_RATE/100.0, max=LAMBDA_RATE*100.0,
+        expected_rate=LAMBDA_RATE,
+        expected_std_dev=np.sqrt(LAMBDA_RATE / (SIM_DURATION)),
+        save_path=f"{args.folder}/poisson_noise_{SUFFIX}_frequency_pdf",
+        suppress_show=suppress_show
+        )
     
-    # 2. Graph the Frequency PDF
-    plot_frequency_pdf(freq_map, 
-                       bins=100, color='red', 
-                       min=None, max=None,
-                       save_path=f"poisson_noise_{SUFFIX}_frequency_pdf.png"
-                       )
-    
-    # 3. Graph the overall IET distribution
+    # Graph the overall IET distribution
     plot_overall_iet_histogram(
-        iet_spatial_grid, bins=150, color='blue', 
-        min=None, max=None, 
+        iet_spatial_grid, bins=num_bins, color='blue', 
+        min=MIN_TIME, max=SIM_DURATION, 
         expected_rate=LAMBDA_RATE, 
         expected_total=SENSOR_WIDTH * SENSOR_HEIGHT * (SIM_DURATION * LAMBDA_RATE - 1),
-        save_path=f"poisson_noise_{SUFFIX}_iet_histogram.png"
+        save_path=f"{args.folder}/poisson_noise_{SUFFIX}_iet_hist",
+        suppress_show=suppress_show
         )

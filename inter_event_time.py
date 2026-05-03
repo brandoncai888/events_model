@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import pickle
+import argparse
 
 def create_iet_grid(df, width, height):
     """
@@ -47,14 +48,21 @@ def load_iet_grid(filename="iet_grid.pkl"):
     
 
 if __name__ == "__main__":
-    # Example dimensions (e.g., DAVIS346)
-    SENSOR_WIDTH = 346
-    SENSOR_HEIGHT = 260
-    SIM_DURATION = 10.0      
-    LAMBDA_RATE = 1.0      
+    parser = argparse.ArgumentParser(description="Generate Poisson noise event data.")
+    parser.add_argument("--rate", type=float, default=1.0, help="Poisson event rate per pixel in Hz.")
+    parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
+    parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
+    parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
+    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: current directory).")
+    args = parser.parse_args()
+
+    SENSOR_WIDTH = args.width
+    SENSOR_HEIGHT = args.height
+    SIM_DURATION = args.duration
+    LAMBDA_RATE = args.rate
     SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
-    filename = f"poisson_noise_{SUFFIX}.csv"  # Adjust as needed
+    filename = f"{args.folder}/poisson_noise_{SUFFIX}.csv"  # Adjust as needed
     
     event_data = pd.read_csv(filename)
 
@@ -62,7 +70,7 @@ if __name__ == "__main__":
     iet_spatial_grid = create_iet_grid(event_data, SENSOR_WIDTH, SENSOR_HEIGHT)
     
     # Save it so you don't have to re-process the CSV next time
-    save_iet_grid(iet_spatial_grid, f"poisson_noise_{SUFFIX}_iet.pkl")
+    save_iet_grid(iet_spatial_grid, f"{args.folder}/poisson_noise_{SUFFIX}_iet.pkl")
 
     # --- Example Analysis Usage ---
     # To get the 5th inter-event time at pixel x=10, y=20:

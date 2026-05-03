@@ -6,6 +6,8 @@ from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
 import matplotlib.animation as animation
 import time
+import argparse
+import sys
 
 def generate_high_contrast_colors(num_colors):
     """
@@ -20,7 +22,7 @@ def generate_high_contrast_colors(num_colors):
     colors = [mcolors.hsv_to_rgb([h, 0.85, 0.95]) for h in hues]
     return colors
 
-def visualize_single_slice_scatter(df, start_t, frame_duration, width, height, p_col='p', color_events=True, show_legend=True, save_path=None):
+def visualize_single_slice_scatter(df, start_t, frame_duration, width, height, p_col='p', color_events=True, show_legend=True, save_path=None, suppress_show=False):
     end_t = start_t + frame_duration
     print(f"Rendering scatter plot from t={start_t}s to t={end_t}s...")
     
@@ -70,9 +72,10 @@ def visualize_single_slice_scatter(df, start_t, frame_duration, width, height, p
         plt.savefig(save_path, dpi=300, facecolor=fig.get_facecolor(), bbox_inches='tight')
         print(f"Image saved successfully to {save_path}")
         
-    plt.show()
+    if not suppress_show:
+        plt.show()
 
-def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', color_events=True, show_legend=True, save_path=None):
+def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', color_events=True, show_legend=True, save_path=None, suppress_show=False):
     print(f"Preparing animation from t={start_t}s to t={end_t}s at {fps} FPS...")
     
     frame_time = 1.0 / fps
@@ -129,9 +132,10 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
                     
         im.set_data(img_data)
         
-        # Update the text of the title object
-        print(f"Event Stream | t = {t0:.3f}s\nFrame Events: {len(frame_df)}")
-        title_obj.set_text(f"Event Stream | t = {t0:.3f}s\nFrame Events: {len(frame_df)}")
+        if t0 > 0:
+            # Update progress in-place so long animations do not flood the terminal.
+            print(f"\rEvent Stream | t = {t0:.3f}s | Frame Events: {len(frame_df)}", end="", flush=True)
+            title_obj.set_text(f"Event Stream | t = {t0:.3f}s\nFrame Events: {len(frame_df)}")
         
         # Return BOTH the image and the title object so blit=True redraws them
         return [im, title_obj]
@@ -155,21 +159,47 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
     if save_path:
         print(f"Saving video to {save_path} (this may take a minute depending on duration)...")
         ani.save(save_path, writer='ffmpeg', fps=fps)
+        print()
         print("Video saved successfully.")
         
     print("Click on the animation window to pause/resume.")
-    plt.show()
+    if not suppress_show:
+        plt.show()
 
 if __name__ == "__main__":
-    SENSOR_WIDTH = 346
-    SENSOR_HEIGHT = 260
-    SIM_DURATION = 10.0      
-    LAMBDA_RATE = 1.0       
-    
+    suppress_show = len(sys.argv) > 1
+
+    parser = argparse.ArgumentParser(description="Generate Poisson noise event data.")
+    parser.add_argument("--rate", type=float, default=1.0, help="Poisson event rate per pixel in Hz.")
+    parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
+    parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
+    parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
+    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: current directory).")
+    args = parser.parse_args()
+
+    SENSOR_WIDTH = args.width
+    SENSOR_HEIGHT = args.height
+    SIM_DURATION = args.duration
+    LAMBDA_RATE = args.rate
+    SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
+
     # Load the event data from the CSV file generated in the previous step
-    filename = f"poisson_noise_{LAMBDA_RATE}Hz_{SIM_DURATION}s.csv"
+    filename = f"{args.folder}/poisson_noise_{SUFFIX}.csv"
     event_data = pd.read_csv(filename)
     
+    # Visualize using the dynamic color generator, but turning the legend OFF
+    # visualize_single_slice_scatter(
+    #     df=event_data, 
+    #     start_t=1.0, 
+    #     frame_duration=0.1, 
+    #     width=SENSOR_WIDTH, 
+    #     height=SENSOR_HEIGHT,
+    #     p_col='p',           
+    #     color_events=True,
+    #     show_legend=True,
+    #     suppress_show=suppress_show
+    # ) 
+
     animate_event_stream(
         df=event_data, 
         start_t=0.0,
@@ -180,5 +210,5 @@ if __name__ == "__main__":
         p_col='p',           
         color_events=True,
         show_legend=False,
-        save_path = f"poisson_noise_{LAMBDA_RATE}Hz_{SIM_DURATION}s_animation.mp4"
+        save_path = f"{args.folder}/poisson_noise_{SUFFIX}_animation.mp4"
     )
