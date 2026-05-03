@@ -30,6 +30,7 @@ def main():
         tvd_values.append(tvd)
         max_file_len = max(max_file_len, len(filename))
     with open('TVD_results.txt', 'w') as f:
+        f.write("TVD Calculation Results\n")
         for filename, tvd in zip(filenames, tvd_values):
             f.write(f"{filename[:-1]:<{max_file_len}} |  {tvd}\n")
 
