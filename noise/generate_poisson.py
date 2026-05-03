@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from visualize import *
+from noise.visualize import *
 import time
 import argparse
 import sys
