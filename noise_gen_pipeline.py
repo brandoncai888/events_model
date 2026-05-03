@@ -1,15 +1,17 @@
 import argparse
 import subprocess
 import sys
+import os
 
 
 def parse_float_list(value):
     return [float(item.strip()) for item in value.split(",") if item.strip()]
 
 
-def run_step(script, rate, duration, width, height, folder):
+def run_step(script, rate, duration, width, height, folder, video=None):
     command = [
         sys.executable,
+        "-m",
         script,
         "--rate",
         str(rate),
@@ -21,8 +23,11 @@ def run_step(script, rate, duration, width, height, folder):
         str(height),
         "--folder",
         folder,
+        "--no_show",
     ]
-    print(f"Running: {' '.join(command)}")
+    if video is not None:
+        command.extend(["--video", str(video)])
+    print(f"\n\nRunning: {' '.join(command)}\n")
     subprocess.run(command, check=True)
 
 
@@ -43,7 +48,8 @@ def main():
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
     parser.add_argument("--paired", action="store_true", help="Pair rates and durations by index instead of running every combination.")
-    parser.add_argument("--folder", type=str, default="noise/data", help="Base folder to save results (default: 'results').")
+    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: 'data').")
+    parser.add_argument("--video", type=float, default=0.0, help="Duration in seconds for the generated video (default: 0.0 = no video).")
     args = parser.parse_args()
 
     if args.paired:
@@ -54,10 +60,12 @@ def main():
         runs = ((rate, duration) for rate in args.rates for duration in args.durations)
 
     for rate, duration in runs:
-        print(f"\n=== Pipeline: rate={rate} Hz, duration={duration}s ===")
-        run_step("noise/generate_poisson.py", rate, duration, args.width, args.height, args.folder)
-        run_step("noise/inter_event_time.py", rate, duration, args.width, args.height, args.folder)
-        run_step("noise/graphs.py", rate, duration, args.width, args.height, args.folder)
+        print(f"\n\n\n=== Pipeline: rate={rate} Hz, duration={duration}s ===")
+        run_step("noise.generate_poisson", rate, duration, args.width, args.height, args.folder)
+        if args.video > 0:
+            run_step("noise.visualize", rate, duration, args.width, args.height, args.folder, video=args.video)
+        run_step("noise.inter_event_time", rate, duration, args.width, args.height, args.folder)
+        run_step("noise.graphs", rate, duration, args.width, args.height, args.folder)
 
 
 if __name__ == "__main__":

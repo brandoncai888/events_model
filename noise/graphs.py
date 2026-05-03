@@ -4,7 +4,7 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-from noise.inter_event_time import load_iet_grid
+from .inter_event_time import load_iet_grid
 import argparse
 import sys
 
@@ -18,14 +18,13 @@ def save_binned_values_csv(save_path, bin_edges, data_values, expected_values):
     csv_path = save_path + '.csv'
     log_left = np.log10(bin_edges[:-1])
     log_right = np.log10(bin_edges[1:])
-    log_centers = (log_left + log_right) / 2.0
     with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['bin', 'left', 'right', 'data', 'expected'])
-        for center, left, right, data, expected in zip(
-            log_centers, log_left, log_right, data_values, expected_values
+        for (i, left, right, data, expected) in zip(
+            range(len(log_left)), log_left, log_right, data_values, expected_values
         ):
-            writer.writerow([center, left, right, data, expected])
+            writer.writerow([i, left, right, data, expected])
     print(f"CSV saved successfully to {csv_path}")
 
 def calculate_pixel_frequencies(grid):
@@ -222,14 +221,13 @@ def plot_overall_iet_histogram(
         plt.show()
 
 if __name__ == "__main__": 
-    suppress_show = len(sys.argv) > 1
-
     parser = argparse.ArgumentParser(description="Generate Poisson noise event data.")
     parser.add_argument("--rate", type=float, default=1.0, help="Poisson event rate per pixel in Hz.")
     parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument("--folder", type=str, default="noise/data", help="Base folder to save results (default: current directory).")
+    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: data).")
+    parser.add_argument("--no_show", action="store_true", help="Suppress showing the animation.")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
@@ -239,28 +237,28 @@ if __name__ == "__main__":
     SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
     MIN_TIME = 1e-6 # minimum IET due to typical numerical precision limits
-    num_bins = int(math.log10(SIM_DURATION / MIN_TIME) * 20 + 1.5)  # 20 bins per decade
-
+    
     # Assuming 'iet_spatial_grid' is the 2D array of lists created in the previous step
     iet_spatial_grid = load_iet_grid(f"{args.folder}/poisson_noise_{SUFFIX}_iet.pkl")
     
     # Graph the Frequency PDF
     freq_map = calculate_pixel_frequencies(iet_spatial_grid)
-    plot_frequency_pdf(
-        freq_map, bins=81, color='red', 
+    plot_frequency_pdf( # 40 bins per decade
+        freq_map, bins=161, color='red', 
         min=LAMBDA_RATE/100.0, max=LAMBDA_RATE*100.0,
         expected_rate=LAMBDA_RATE,
         expected_std_dev=np.sqrt(LAMBDA_RATE / (SIM_DURATION)),
         save_path=f"{args.folder}/poisson_noise_{SUFFIX}_frequency_pdf",
-        suppress_show=suppress_show
+        suppress_show=args.no_show
         )
     
     # Graph the overall IET distribution
+    num_bins = int(math.log10(SIM_DURATION / MIN_TIME) * 40 + 1.5)  # 40 bins per decade
     plot_overall_iet_histogram(
         iet_spatial_grid, bins=num_bins, color='blue', 
         min=MIN_TIME, max=SIM_DURATION, 
         expected_rate=LAMBDA_RATE, 
         expected_total=SENSOR_WIDTH * SENSOR_HEIGHT * (SIM_DURATION * LAMBDA_RATE - 1),
         save_path=f"{args.folder}/poisson_noise_{SUFFIX}_iet_hist",
-        suppress_show=suppress_show
+        suppress_show=args.no_show
         )

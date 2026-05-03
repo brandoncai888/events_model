@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from noise.visualize import *
+from .visualize import *
 import time
 import argparse
 import sys
@@ -25,14 +25,13 @@ def generate_poisson_noise(width, height, duration, lambda_hz):
 
 
 if __name__ == "__main__":
-    suppress_show = len(sys.argv) > 1
-
     parser = argparse.ArgumentParser(description="Generate Poisson noise event data.")
     parser.add_argument("--rate", type=float, default=1.0, help="Poisson event rate per pixel in Hz.")
     parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument("--folder", type=str, default="noise/data", help="Base folder to save results (default: current directory).")
+    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: data).")
+    parser.add_argument("--no_show", action="store_true", help="Suppress showing the animation.")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
@@ -45,17 +44,16 @@ if __name__ == "__main__":
     event_data = generate_poisson_noise(SENSOR_WIDTH, SENSOR_HEIGHT, SIM_DURATION, LAMBDA_RATE)
     event_data.to_csv(f"{args.folder}/poisson_noise_{SUFFIX}.csv", index=False)
 
-
-    animate_event_stream(
-        df=event_data, 
-        start_t=0.0,
-        end_t = SIM_DURATION, 
-        fps=30,
-        width=SENSOR_WIDTH, 
-        height=SENSOR_HEIGHT,
-        p_col='p',           
-        color_events=True,
-        show_legend=False,
-        save_path = f"{args.folder}/poisson_noise_{SUFFIX}_animation.mp4",
-        suppress_show=suppress_show
-    ) 
+    if not args.no_show:
+        animate_event_stream(
+            df=event_data, 
+            start_t=0.0,
+            end_t = SIM_DURATION, 
+            fps=30,
+            width=SENSOR_WIDTH, 
+            height=SENSOR_HEIGHT,
+            p_col='p',           
+            color_events=True,
+            show_legend=False,
+            #save_path = f"{args.folder}/poisson_noise_{SUFFIX}_animation.mp4",
+        ) 
