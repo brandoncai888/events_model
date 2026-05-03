@@ -243,8 +243,10 @@ if __name__ == "__main__":
     
     # Graph the Frequency PDF
     freq_map = calculate_pixel_frequencies(iet_spatial_grid)
-    plot_frequency_pdf( # 40 bins per decade
-        freq_map, bins=161, color='red', 
+    # 100 bins per decade seems reasonable 
+    # for 346*260 = 89960 pixels spanning ~1 decade
+    plot_frequency_pdf( 
+        freq_map, bins=401, color='red', 
         min=LAMBDA_RATE/100.0, max=LAMBDA_RATE*100.0,
         expected_rate=LAMBDA_RATE,
         expected_std_dev=np.sqrt(LAMBDA_RATE / (SIM_DURATION)),
@@ -253,7 +255,9 @@ if __name__ == "__main__":
         )
     
     # Graph the overall IET distribution
-    num_bins = int(math.log10(SIM_DURATION / MIN_TIME) * 40 + 1.5)  # 40 bins per decade
+    num_bins = int(math.log10(SIM_DURATION / MIN_TIME) * 100 + 1.5) 
+    # 100 bins per decade definitely reasonable 
+    # for 39*346*260 = 3596000 IETs spanning ~2 decades
     plot_overall_iet_histogram(
         iet_spatial_grid, bins=num_bins, color='blue', 
         min=MIN_TIME, max=SIM_DURATION, 
