@@ -178,8 +178,8 @@ def plot_overall_iet_histogram(
     if len(valid_iets) == 0:
         print("No valid IET data to plot.")
         return
-
-    plt.figure(figsize=(10, 6))
+    width = 10 if max is None or min is None else 1.5+1*math.log10(max/min)
+    plt.figure(figsize=(width, 6))
     
     # Create logarithmically spaced bins for the Time (X) axis
     if min is not None and max is not None:
