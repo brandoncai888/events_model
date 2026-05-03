@@ -229,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: current directory).")
+    parser.add_argument("--folder", type=str, default="noise/data", help="Base folder to save results (default: current directory).")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width

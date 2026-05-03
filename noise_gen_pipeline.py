@@ -27,9 +27,7 @@ def run_step(script, rate, duration, width, height, folder):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run generate_poisson, inter_event_time, and graphs over rate/duration inputs."
-    )
+    parser = argparse.ArgumentParser(description="Run generate_poisson, inter_event_time, and graphs over rate/duration inputs.")
     parser.add_argument(
         "--rates",
         type=parse_float_list,
@@ -44,17 +42,8 @@ def main():
     )
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument(
-        "--paired",
-        action="store_true",
-        help="Pair rates and durations by index instead of running every combination.",
-    )
-    parser.add_argument(
-        "--folder",
-        type=str,
-        default=".",
-        help="Base folder to save results (default: 'results').",
-    )
+    parser.add_argument("--paired", action="store_true", help="Pair rates and durations by index instead of running every combination.")
+    parser.add_argument("--folder", type=str, default="noise/data", help="Base folder to save results (default: 'results').")
     args = parser.parse_args()
 
     if args.paired:
@@ -66,9 +55,9 @@ def main():
 
     for rate, duration in runs:
         print(f"\n=== Pipeline: rate={rate} Hz, duration={duration}s ===")
-        run_step("generate_poisson.py", rate, duration, args.width, args.height, args.folder)
-        run_step("inter_event_time.py", rate, duration, args.width, args.height, args.folder)
-        run_step("graphs.py", rate, duration, args.width, args.height, args.folder)
+        run_step("noise/generate_poisson.py", rate, duration, args.width, args.height, args.folder)
+        run_step("noise/inter_event_time.py", rate, duration, args.width, args.height, args.folder)
+        run_step("noise/graphs.py", rate, duration, args.width, args.height, args.folder)
 
 
 if __name__ == "__main__":
