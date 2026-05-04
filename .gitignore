@@ -1,4 +1,6 @@
 *s.csv
+*z.csv
+*.aedat
 *.pkl
 *.mp4
 *.pyc
