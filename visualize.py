@@ -175,6 +175,7 @@ if __name__ == "__main__":
     parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: data).")
     parser.add_argument("--no_show", action="store_true", help="Suppress plt.show() to avoid opening windows during batch runs.")
     parser.add_argument("--video", type=float, default=float('inf'), help="Duration in seconds for the generated video (default: inf = full duration).")
+    parser.add_argument("--filename", type=str, default=None, help="Custom filename prefix (without extension) for the generated CSV and video. If not provided, it will be auto-generated based on rate and duration.")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
@@ -184,7 +185,7 @@ if __name__ == "__main__":
     SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
     # Load the event data from the CSV file generated in the previous step
-    filename = f"{args.folder}/poisson_noise_{SUFFIX}.csv"
+    filename = f"{args.folder}/poisson_noise_{SUFFIX}.csv" if args.filename is None else args.filename
     event_data = pd.read_csv(filename)
     
     # Visualize using the dynamic color generator, but turning the legend OFF
@@ -209,6 +210,6 @@ if __name__ == "__main__":
         p_col='p',           
         color_events=True,
         show_legend=False,
-        save_path = f"{args.folder}/poisson_noise_{SUFFIX}_animation.mp4",
+        save_path = filename.replace('.csv', '_animation.mp4'),
         suppress_show=args.no_show
     )

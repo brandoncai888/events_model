@@ -63,7 +63,7 @@ def main():
         print(f"\n\n\n=== Pipeline: rate={rate} Hz, duration={duration}s ===")
         run_step("noise.generate_poisson", rate, duration, args.width, args.height, args.folder)
         if args.video > 0:
-            run_step("noise.visualize", rate, duration, args.width, args.height, args.folder, video=args.video)
+            run_step("visualize", rate, duration, args.width, args.height, args.folder, video=args.video)
         run_step("noise.inter_event_time", rate, duration, args.width, args.height, args.folder)
         run_step("noise.graphs", rate, duration, args.width, args.height, args.folder)
 
