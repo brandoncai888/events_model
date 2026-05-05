@@ -25,6 +25,9 @@ def main():
     with open('TVD_filenames.txt', 'r') as f:
         filenames = f.readlines()
     for filename in filenames:
+        if filename == '\n':
+            tvd_values.append(None)
+            continue
         df = pd.read_csv(filename[:-1]) # Remove newline character
         tvd = calculate_tvd(df)
         tvd_values.append(tvd)

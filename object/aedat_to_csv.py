@@ -1,12 +1,11 @@
-import dv
-import pandas as pd
-
 import argparse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-def aedat2_to_csv(input_path, output_path, camera='davis'):
+
+def aedat2_to_csv(input_path, output_path, camera='davis346'):
     print(f"Opening {input_path} (AEDAT 2.0)...")
     
     with open(input_path, 'rb') as f:
@@ -31,24 +30,26 @@ def aedat2_to_csv(input_path, output_path, camera='davis'):
     timestamps = data[1::2]
     
     # 4. Decode the addresses using bitwise shifts
-    if camera.lower() == 'davis':
-        # Default for DAVIS cameras (e.g., DAVIS240, DAVIS346)
-        x_coords = (addresses >> 17) & 0x000003FF
-        y_coords = (addresses >> 2) & 0x00007FFF
-        polarities = (addresses >> 1) & 0x00000001
+    camera = camera.lower()
+    if camera in {'davis', 'davis346'}:
+        # jAER AEDAT2 DAVIS layout, including DAVIS BLUE 346:
+        # bits 12-21: x, bits 22-30: y, bit 11: polarity.
+        x_coords = (addresses >> 12) & 0x000003FF
+        y_coords = (addresses >> 22) & 0x000001FF
+        polarities = (addresses >> 11) & 0x00000001
     elif camera.lower() == 'dvs128':
         # Default for older DVS128 cameras
         x_coords = (addresses >> 1) & 0x0000007F
         y_coords = (addresses >> 8) & 0x0000007F
         polarities = addresses & 0x00000001
     else:
-        raise ValueError("Unsupported camera type. Choose 'davis' or 'dvs128'.")
+        raise ValueError("Unsupported camera type. Choose 'davis346' or 'dvs128'.")
 
     # 5. Package into a DataFrame and save
     df = pd.DataFrame({
-        't': (timestamps - min(timestamps)) / 1e6,  # Convert from microseconds to seconds
         'x': x_coords,
         'y': y_coords,
+        't': (timestamps - min(timestamps)) / 1e6,  # Convert from microseconds to seconds
         'p': polarities
     })
 
@@ -69,10 +70,11 @@ if __name__ == "__main__":
         help="Comma-separated .aedat files: events1,events2",
     )
     parser.add_argument("--folder", type=str, default="data", help="Base folder to find .aedat files and save CSVs")
+    parser.add_argument("--camera", type=str, default="davis346", help="Camera address layout: davis346 or dvs128")
     args = parser.parse_args()
 
     for aedat_file in args.aedat:
-        input_file = f"{args.folder}/{aedat_file}.aedat"
-        output_file = f"{args.folder}/{aedat_file}.csv"
+        input_file = Path(args.folder) / f"{aedat_file}.aedat"
+        output_file = Path(args.folder) / f"{aedat_file}.csv"
         print(f"\n\nProcessing {input_file}...")
-        aedat2_to_csv(input_file, output_file)
+        aedat2_to_csv(input_file, output_file, camera=args.camera)
