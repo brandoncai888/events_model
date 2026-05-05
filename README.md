@@ -27,4 +27,4 @@ We can also use the same duration and vary the rate: <code>python noise_gen_pipe
 visualize using <code>python ./visualize.py --filename object/45Hz.csv --duration 5 --fps 100</code>
 
 ##### Grab a snippet
-<code>python ./visualize.py --filename object/45Hz.csv --duration .05 --fps 10000 --start 2.67 --slowdown 10</code>
+<code>python ./visualize.py --filename object/45Hz.csv --duration .03 --fps 100000 --start 2.67 --slowdown 100 </code>

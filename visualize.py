@@ -75,11 +75,31 @@ def visualize_single_slice_scatter(df, start_t, frame_duration, width, height, p
     if not suppress_show:
         plt.show()
 
-def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', color_events=True, show_legend=True, save_path=None, suppress_show=False):
+def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', color_events=True, show_legend=True, save_path=None, suppress_show=False, scale_factor=1.0):
     print(f"Preparing animation from t={start_t}s to t={end_t}s at {fps} FPS...")
+
+    required_cols = {'x', 'y', 't'}
+    if color_events:
+        required_cols.add(p_col)
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required CSV columns: {sorted(missing_cols)}")
+
+    in_bounds = (df['x'] >= 0) & (df['x'] < width) & (df['y'] >= 0) & (df['y'] < height)
+    if not in_bounds.all():
+        dropped = len(df) - int(in_bounds.sum())
+        print(
+            f"Warning: dropping {dropped:,}/{len(df):,} events outside "
+            f"the {width}x{height} frame. Check the AEDAT address decoder "
+            "or pass the correct --width/--height."
+        )
+        df = df[in_bounds].copy()
+
+    if df.empty:
+        raise ValueError("No in-bounds events to animate.")
     
     frame_time = 1.0 / fps
-    num_frames = int((end_t - start_t) / frame_time)
+    num_frames = max(1, int(np.ceil((end_t - start_t) / frame_time)))
     
     fig, ax = plt.subplots(figsize=(8, 6))
     
@@ -105,7 +125,7 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
     ax.set_ylabel("Y coordinate")
     
     # Initialize the title object so we can update and return it later
-    title_obj = ax.set_title("") 
+    title_obj = ax.set_title("\n") 
     
     if show_legend:
         ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.05, 1))
@@ -132,10 +152,10 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
                     
         im.set_data(img_data)
         
-        if t0 > 0:
+        if t0 > start_t:
             # Update progress in-place so long animations do not flood the terminal.
-            print(f"\rEvent Stream | t = {t0:.3f}s | Frame Events: {len(frame_df)}", end="", flush=True)
-            title_obj.set_text(f"Event Stream | t = {t0:.3f}s\nFrame Events: {len(frame_df)}")
+            print(f"\rEvent Stream | t = {t0:.4f}s | Frame Events: {len(frame_df)}", end="", flush=True)
+            title_obj.set_text(f"Event Stream | t = {t0:.4f}s\nFrame Events: {len(frame_df)}")
         
         # Return BOTH the image and the title object so blit=True redraws them
         return [im, title_obj]
@@ -158,7 +178,7 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
     
     if save_path:
         print(f"Saving video to {save_path} (this may take a minute depending on duration)...")
-        ani.save(save_path, writer='ffmpeg', fps=fps)
+        ani.save(save_path, writer='ffmpeg', fps=fps/scale_factor)
         print()
         print("Video saved successfully.")
         
@@ -176,6 +196,9 @@ if __name__ == "__main__":
     parser.add_argument("--no_show", action="store_true", help="Suppress plt.show() to avoid opening windows during batch runs.")
     parser.add_argument("--video", type=float, default=float('inf'), help="Duration in seconds for the generated video (default: inf = full duration).")
     parser.add_argument("--filename", type=str, default=None, help="Custom filename prefix (without extension) for the generated CSV and video. If not provided, it will be auto-generated based on rate and duration.")
+    parser.add_argument("--fps", type=int, default=30, help="Frames per second for the generated video (default: 30).")
+    parser.add_argument("--start", type=float, default=0.0, help="Start time in seconds for visualization (default: 0).")
+    parser.add_argument("--slowdown", type=float, default=1.0, help="Slowdown factor for the generated video (default: 1.0 = no slowdown).")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
@@ -188,6 +211,10 @@ if __name__ == "__main__":
     filename = f"{args.folder}/poisson_noise_{SUFFIX}.csv" if args.filename is None else args.filename
     event_data = pd.read_csv(filename)
     
+    out_filename = filename.replace('.csv', '')
+    if args.start != 0.0:
+        out_filename += f"_start{args.start}s"
+    out_filename += "_animation.mp4"
     # Visualize using the dynamic color generator, but turning the legend OFF
     # visualize_single_slice_scatter(
     #     df=event_data, 
@@ -202,14 +229,15 @@ if __name__ == "__main__":
     # ) 
     animate_event_stream(
         df=event_data, 
-        start_t=0.0,
-        end_t=min(args.video, SIM_DURATION), 
-        fps=30,
+        start_t=args.start,
+        end_t=args.start+min(args.video, SIM_DURATION), 
+        fps=args.fps,
+        scale_factor=args.slowdown,
         width=SENSOR_WIDTH, 
         height=SENSOR_HEIGHT,
         p_col='p',           
         color_events=True,
         show_legend=False,
-        save_path = filename.replace('.csv', '_animation.mp4'),
+        save_path = out_filename,
         suppress_show=args.no_show
     )
