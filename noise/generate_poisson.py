@@ -3,7 +3,7 @@ import pandas as pd
 from visualize import *
 import time
 import argparse
-import sys
+import file_manager as fm
 
 def generate_poisson_noise(width, height, duration, lambda_hz):
     print(f"Generating noise (Lambda: {lambda_hz} Hz, Duration: {duration}s)...")
@@ -30,7 +30,8 @@ if __name__ == "__main__":
     parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: data).")
+    parser.add_argument("--data_root", "--folder", dest="data_root", type=str, default=fm.DEFAULT_DATA_ROOT, help="Root folder for managed data files (default: data).")
+    parser.add_argument("--dataset", "--set", dest="dataset", type=str, default=None, help="Dataset folder name. Defaults to '<rate>Hz'.")
     parser.add_argument("--no_show", action="store_true", help="Suppress showing the animation.")
     args = parser.parse_args()
 
@@ -38,11 +39,19 @@ if __name__ == "__main__":
     SENSOR_HEIGHT = args.height
     SIM_DURATION = args.duration
     LAMBDA_RATE = args.rate
-    SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
     # Generating data with 14 arbitrary distinct classes in the 'p' column
     event_data = generate_poisson_noise(SENSOR_WIDTH, SENSOR_HEIGHT, SIM_DURATION, LAMBDA_RATE)
-    event_data.to_csv(f"{args.folder}/poisson_noise_{SUFFIX}.csv", index=False)
+    events_path = fm.events_file(
+        data_root=args.data_root,
+        source=fm.SOURCE_NOISE,
+        dataset=args.dataset,
+        rate=LAMBDA_RATE,
+        duration=SIM_DURATION,
+        create_parent=True,
+    )
+    event_data.to_csv(events_path, index=False)
+    print(f"Events saved successfully to {events_path}")
 
     if not args.no_show:
         animate_event_stream(
@@ -55,5 +64,4 @@ if __name__ == "__main__":
             p_col='p',           
             color_events=True,
             show_legend=False,
-            #save_path = f"{args.folder}/poisson_noise_{SUFFIX}_animation.mp4",
         ) 

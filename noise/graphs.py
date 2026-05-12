@@ -6,7 +6,9 @@ import matplotlib.pyplot as plt
 import math
 from .inter_event_time import load_iet_grid
 import argparse
-import sys
+from pathlib import Path
+
+import file_manager as fm
 
 
 def save_binned_values_csv(save_path, bin_edges, data_values, expected_values):
@@ -226,20 +228,32 @@ if __name__ == "__main__":
     parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: data).")
+    parser.add_argument("--data_root", "--folder", dest="data_root", type=str, default=fm.DEFAULT_DATA_ROOT, help="Root folder for managed data files (default: data).")
+    parser.add_argument("--dataset", "--set", dest="dataset", type=str, default=None, help="Dataset folder name. Defaults to '<rate>Hz'.")
     parser.add_argument("--no_show", action="store_true", help="Suppress showing the animation.")
+    parser.add_argument("--filename", type=str, default=None, help="Optional explicit input IET .pkl path.")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
     SENSOR_HEIGHT = args.height
     SIM_DURATION = args.duration
     LAMBDA_RATE = args.rate
-    SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
     MIN_TIME = 1e-6 # minimum IET due to typical numerical precision limits
     
     # Assuming 'iet_spatial_grid' is the 2D array of lists created in the previous step
-    iet_spatial_grid = load_iet_grid(f"{args.folder}/poisson_noise_{SUFFIX}_iet.pkl")
+    filename = fm.find_iet_file(
+        filename=args.filename,
+        data_root=args.data_root,
+        source=fm.SOURCE_NOISE,
+        dataset=args.dataset,
+        rate=LAMBDA_RATE,
+        duration=SIM_DURATION,
+    )
+    plot_stem = Path(filename).stem
+    if plot_stem.endswith("_iet"):
+        plot_stem = plot_stem[:-4]
+    iet_spatial_grid = load_iet_grid(filename)
     
     # Graph the Frequency PDF
     freq_map = calculate_pixel_frequencies(iet_spatial_grid)
@@ -250,7 +264,16 @@ if __name__ == "__main__":
         min=LAMBDA_RATE/100.0, max=LAMBDA_RATE*100.0,
         expected_rate=LAMBDA_RATE,
         expected_std_dev=np.sqrt(LAMBDA_RATE / (SIM_DURATION)),
-        save_path=f"{args.folder}/poisson_noise_{SUFFIX}_frequency_pdf",
+        save_path=str(fm.picture_base(
+            "frequency_pdf",
+            data_root=args.data_root,
+            source=fm.SOURCE_NOISE,
+            dataset=args.dataset,
+            rate=LAMBDA_RATE,
+            duration=SIM_DURATION,
+            stem=plot_stem,
+            create_parent=True,
+        )),
         suppress_show=args.no_show
         )
     
@@ -263,6 +286,15 @@ if __name__ == "__main__":
         min=MIN_TIME, max=SIM_DURATION, 
         expected_rate=LAMBDA_RATE, 
         expected_total=SENSOR_WIDTH * SENSOR_HEIGHT * (SIM_DURATION * LAMBDA_RATE - 1),
-        save_path=f"{args.folder}/poisson_noise_{SUFFIX}_iet_hist",
+        save_path=str(fm.picture_base(
+            "iet_hist",
+            data_root=args.data_root,
+            source=fm.SOURCE_NOISE,
+            dataset=args.dataset,
+            rate=LAMBDA_RATE,
+            duration=SIM_DURATION,
+            stem=plot_stem,
+            create_parent=True,
+        )),
         suppress_show=args.no_show
         )

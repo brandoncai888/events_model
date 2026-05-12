@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 import pickle
 import argparse
+from pathlib import Path
+
+import file_manager as fm
 
 def create_iet_grid(df, width, height):
     """
@@ -53,17 +56,26 @@ if __name__ == "__main__":
     parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: data).")
+    parser.add_argument("--data_root", "--folder", dest="data_root", type=str, default=fm.DEFAULT_DATA_ROOT, help="Root folder for managed data files (default: data).")
+    parser.add_argument("--dataset", "--set", dest="dataset", type=str, default=None, help="Dataset folder name. Defaults to '<rate>Hz'.")
     parser.add_argument("--no_show", action="store_true", help="Suppress showing the animation.")
+    parser.add_argument("--filename", type=str, default=None, help="Optional explicit input CSV path.")
+    parser.add_argument("--output_filename", type=str, default=None, help="Optional explicit output IET .pkl path.")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
     SENSOR_HEIGHT = args.height
     SIM_DURATION = args.duration
     LAMBDA_RATE = args.rate
-    SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
-    filename = f"{args.folder}/poisson_noise_{SUFFIX}.csv"  # Adjust as needed
+    filename = fm.find_events_file(
+        filename=args.filename,
+        data_root=args.data_root,
+        source=fm.SOURCE_NOISE,
+        dataset=args.dataset,
+        rate=LAMBDA_RATE,
+        duration=SIM_DURATION,
+    )
     
     event_data = pd.read_csv(filename)
 
@@ -71,7 +83,20 @@ if __name__ == "__main__":
     iet_spatial_grid = create_iet_grid(event_data, SENSOR_WIDTH, SENSOR_HEIGHT)
     
     # Save it so you don't have to re-process the CSV next time
-    save_iet_grid(iet_spatial_grid, f"{args.folder}/poisson_noise_{SUFFIX}_iet.pkl")
+    output_filename = (
+        Path(args.output_filename)
+        if args.output_filename is not None
+        else fm.iet_file(
+            data_root=args.data_root,
+            source=fm.SOURCE_NOISE,
+            dataset=args.dataset,
+            rate=LAMBDA_RATE,
+            duration=SIM_DURATION,
+            stem=Path(filename).stem,
+            create_parent=True,
+        )
+    )
+    save_iet_grid(iet_spatial_grid, output_filename)
 
     # --- Example Analysis Usage ---
     # To get the 5th inter-event time at pixel x=10, y=20:

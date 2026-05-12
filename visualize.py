@@ -7,7 +7,9 @@ from matplotlib.patches import Patch
 import matplotlib.animation as animation
 import time
 import argparse
-import sys
+from pathlib import Path
+
+import file_manager as fm
 
 def generate_high_contrast_colors(num_colors):
     """
@@ -100,8 +102,10 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
     
     frame_time = 1.0 / fps
     num_frames = max(1, int(np.ceil((end_t - start_t) / frame_time)))
-    
-    fig, ax = plt.subplots(figsize=(8, 6))
+    size = (8,6)
+    if scale_factor != 1.0:
+        size = (12,9)
+    fig, ax = plt.subplots(figsize=size)
     
     unique_vals = sorted(df[p_col].unique())
     num_vals = len(unique_vals)
@@ -192,7 +196,11 @@ if __name__ == "__main__":
     parser.add_argument("--duration", type=float, default=20.0, help="Simulation duration in seconds.")
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
-    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: data).")
+    parser.add_argument("--data_root", "--folder", dest="data_root", type=str, default=fm.DEFAULT_DATA_ROOT, help="Root folder for managed data files (default: data).")
+    parser.add_argument("--source", choices=fm.SOURCES, default=None, help="Data source folder. Defaults to noise unless --filename is a managed object path.")
+    parser.add_argument("--dataset", "--set", "--name", dest="dataset", type=str, default=None, help="Dataset folder name. Defaults to '<rate>Hz' for noise.")
+    parser.add_argument("--slice", dest="slice_name", type=str, default=None, help="Optional time-slice folder name, for example 2.67_2.71.")
+    parser.add_argument("--polarity", choices=["ON", "OFF"], default=None, help="Optional polarity suffix for object event files.")
     parser.add_argument("--no_show", action="store_true", help="Suppress plt.show() to avoid opening windows during batch runs.")
     parser.add_argument("--video", type=float, default=float('inf'), help="Duration in seconds for the generated video (default: inf = full duration).")
     parser.add_argument("--filename", type=str, default=None, help="Custom filename prefix (without extension) for the generated CSV and video. If not provided, it will be auto-generated based on rate and duration.")
@@ -205,16 +213,50 @@ if __name__ == "__main__":
     SENSOR_HEIGHT = args.height
     SIM_DURATION = args.duration
     LAMBDA_RATE = args.rate
-    SUFFIX = f"{LAMBDA_RATE}Hz_{SIM_DURATION}s"
 
     # Load the event data from the CSV file generated in the previous step
-    filename = f"{args.folder}/poisson_noise_{SUFFIX}.csv" if args.filename is None else args.filename
+    source = args.source or fm.SOURCE_NOISE
+    filename = fm.find_events_file(
+        filename=args.filename,
+        data_root=args.data_root,
+        source=source,
+        dataset=args.dataset,
+        rate=LAMBDA_RATE,
+        duration=SIM_DURATION,
+        slice_name=args.slice_name,
+        polarity=args.polarity,
+    )
+    context = fm.context_from_path(
+        filename,
+        data_root=args.data_root,
+        source=args.source,
+        dataset=args.dataset,
+        slice_name=args.slice_name,
+    )
+    source = context["source"]
+    dataset = context["dataset"]
+    input_slice_name = context["slice_name"]
+    event_stem = Path(filename).stem
     event_data = pd.read_csv(filename)
     
-    out_filename = filename.replace('.csv', '')
-    if args.start != 0.0:
-        out_filename += f"_start{args.start}s"
-    out_filename += "_animation.mp4"
+    end_t = args.start + min(args.video, SIM_DURATION)
+    output_slice_name = input_slice_name
+    if output_slice_name is None and (args.start != 0.0 or end_t < SIM_DURATION):
+        output_slice_name = fm.time_slice_name(args.start, end_t)
+    video_name = "animation"
+    if args.slowdown != 1.0:
+        video_name += f"_{round(1 / args.slowdown, 2)}x"
+    out_filename = fm.video_file(
+        video_name,
+        data_root=args.data_root,
+        source=source,
+        dataset=dataset,
+        rate=LAMBDA_RATE,
+        duration=SIM_DURATION,
+        stem=event_stem,
+        slice_name=output_slice_name,
+        create_parent=True,
+    )
     # Visualize using the dynamic color generator, but turning the legend OFF
     # visualize_single_slice_scatter(
     #     df=event_data, 
@@ -230,7 +272,7 @@ if __name__ == "__main__":
     animate_event_stream(
         df=event_data, 
         start_t=args.start,
-        end_t=args.start+min(args.video, SIM_DURATION), 
+        end_t=end_t, 
         fps=args.fps,
         scale_factor=args.slowdown,
         width=SENSOR_WIDTH, 
@@ -238,6 +280,6 @@ if __name__ == "__main__":
         p_col='p',           
         color_events=True,
         show_legend=False,
-        save_path = out_filename,
+        save_path = str(out_filename),
         suppress_show=args.no_show
     )
