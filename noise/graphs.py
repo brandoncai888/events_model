@@ -4,11 +4,14 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-from .inter_event_time import load_iet_grid
 import argparse
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import file_manager as fm
+from noise.inter_event_time import load_iet_grid
 
 
 def save_binned_values_csv(save_path, bin_edges, data_values, expected_values):

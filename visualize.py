@@ -42,13 +42,11 @@ def visualize_single_slice_scatter(df, start_t, frame_duration, width, height, p
     if not color_events:
         ax.scatter(slice_df['x'], slice_df['y'], c='white', s=1, alpha=0.9, label='Event')
     else:
-        unique_vals = sorted(df[p_col].unique()) # Get from whole df to keep colors consistent
-        bright_colors = generate_high_contrast_colors(len(unique_vals))
-        
-        for i, val in enumerate(unique_vals):
-            subset = slice_df[slice_df[p_col] == val]
+        colors = generate_high_contrast_colors(2)
+        for polarity in [0, 1]:
+            subset = slice_df[slice_df[p_col] == polarity]
             if not subset.empty:
-                ax.scatter(subset['x'], subset['y'], color=bright_colors[i], s=1, label=f"{p_col}: {val}", alpha=0.9)
+                ax.scatter(subset['x'], subset['y'], color=colors[polarity], s=1, label=f"{p_col}: {polarity}", alpha=0.9)
 
     ax.set_xlim(0, width)
     ax.set_ylim(height, 0)
@@ -107,19 +105,17 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
         size = (12,9)
     fig, ax = plt.subplots(figsize=size)
     
-    unique_vals = sorted(df[p_col].unique())
-    num_vals = len(unique_vals)
-    
-    if not color_events:
+    if color_events:
+        colors = generate_high_contrast_colors(2)
+        unique_vals = [val for val in [0, 1] if val in df[p_col].unique()]
+        cmap = ListedColormap(['black', colors[0], colors[1]])
+        vmin, vmax = 0, 2
+        legend_elements = [Patch(facecolor=colors[val], label=f"{p_col}: {val}", edgecolor='gray') for val in unique_vals]
+    else:
+        unique_vals = []
         cmap = ListedColormap(['black', 'white'])
         vmin, vmax = 0, 1
         legend_elements = [Patch(facecolor='white', label='Event', edgecolor='gray')]
-    else:
-        bright_colors = generate_high_contrast_colors(num_vals)
-        all_colors = ['black'] + bright_colors
-        cmap = ListedColormap(all_colors)
-        vmin, vmax = 0, num_vals
-        legend_elements = [Patch(facecolor=bright_colors[i], label=f"{p_col}: {val}", edgecolor='gray') for i, val in enumerate(unique_vals)]
     
     im = ax.imshow(np.zeros((height, width)), cmap=cmap, vmin=vmin, vmax=vmax, origin='upper')
     
@@ -147,12 +143,11 @@ def animate_event_stream(df, start_t, end_t, fps, width, height, p_col='p', colo
             hist, _, _ = np.histogram2d(frame_df['y'], frame_df['x'], bins=[height, width], range=[[0, height], [0, width]])
             img_data[hist > 0] = 1
         else:
-            for i, val in enumerate(unique_vals):
-                mapped_val = i + 1 
+            for val in unique_vals:
                 subset = frame_df[frame_df[p_col] == val]
                 if not subset.empty:
                     hist, _, _ = np.histogram2d(subset['y'], subset['x'], bins=[height, width], range=[[0, height], [0, width]])
-                    img_data[hist > 0] = mapped_val 
+                    img_data[hist > 0] = val + 1
                     
         im.set_data(img_data)
         
@@ -207,6 +202,7 @@ if __name__ == "__main__":
     parser.add_argument("--fps", type=int, default=30, help="Frames per second for the generated video (default: 30).")
     parser.add_argument("--start", type=float, default=0.0, help="Start time in seconds for visualization (default: 0).")
     parser.add_argument("--slowdown", type=float, default=1.0, help="Slowdown factor for the generated video (default: 1.0 = no slowdown).")
+    parser.add_argument("--line", type=int, default=None, help="Use line-filtered events file with the specified line number (e.g., --line 1 for line1.csv).")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
@@ -225,6 +221,7 @@ if __name__ == "__main__":
         duration=SIM_DURATION,
         slice_name=args.slice_name,
         polarity=args.polarity,
+        line=args.line,
     )
     context = fm.context_from_path(
         filename,
@@ -244,6 +241,8 @@ if __name__ == "__main__":
     if output_slice_name is None and (args.start != 0.0 or end_t < SIM_DURATION):
         output_slice_name = fm.time_slice_name(args.start, end_t)
     video_name = "animation"
+    if args.line is not None and f"_line{args.line}" not in event_stem:
+        video_name += f"_line{args.line}"
     if args.slowdown != 1.0:
         video_name += f"_{round(1 / args.slowdown, 2)}x"
     out_filename = fm.video_file(
@@ -256,6 +255,7 @@ if __name__ == "__main__":
         stem=event_stem,
         slice_name=output_slice_name,
         create_parent=True,
+        line=args.line,
     )
     # Visualize using the dynamic color generator, but turning the legend OFF
     # visualize_single_slice_scatter(

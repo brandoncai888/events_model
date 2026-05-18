@@ -2,7 +2,9 @@ import pandas as pd
 import numpy as np
 import pickle
 import argparse
+import re
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import file_manager as fm
 
@@ -123,6 +125,96 @@ def zero_iet_file_except_line(input_filename, output_filename, x0, y0, x1, y1, l
     masked_grid = zero_iets_except_line(grid, x0, y0, x1, y1, line_radius=line_radius)
     save_iet_grid(masked_grid, output_filename)
     return masked_grid
+
+
+def next_line_label(output_dir, base_stem):
+    output_dir = Path(output_dir)
+    pattern = re.compile(rf"^{re.escape(base_stem)}_line(\d+)_iet\.pkl$")
+    existing = []
+    if output_dir.exists():
+        for path in output_dir.glob(f"{base_stem}_line*_iet.pkl"):
+            match = pattern.match(path.name)
+            if match:
+                existing.append(int(match.group(1)))
+    return max(existing, default=0) + 1
+
+
+def count_grid_iets(grid):
+    return sum(len(values) for row in grid for values in row)
+
+
+def line_keep_pixels(x0, y0, x1, y1, width, height, line_radius=0):
+    line_radius = int(line_radius)
+    keep_pixels = set()
+    for x, y in get_line_pixels(x0, y0, x1, y1, width, height):
+        for dy in range(-line_radius, line_radius + 1):
+            for dx in range(-line_radius, line_radius + 1):
+                nx = x + dx
+                ny = y + dy
+                if dx * dx + dy * dy <= line_radius * line_radius and 0 <= nx < width and 0 <= ny < height:
+                    keep_pixels.add((nx, ny))
+    return keep_pixels
+
+
+def save_line_mask_image(image_filename, keep_pixels, width, height, keep_line, line_radius):
+    mask = np.zeros((height, width), dtype=np.uint8)
+    for x, y in keep_pixels:
+        mask[y, x] = 1
+
+    x0, y0, x1, y1 = keep_line
+    fig, ax = plt.subplots(figsize=(8, 6), facecolor="black")
+    ax.imshow(mask, cmap="gray", origin="upper", interpolation="nearest", vmin=0, vmax=1)
+    ax.plot([x0, x1], [y0, y1], color="red", linewidth=0.8, alpha=0.8)
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, 0)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_title(f"Kept pixels | radius={line_radius}", color="white")
+    ax.set_xlabel("X coordinate", color="white")
+    ax.set_ylabel("Y coordinate", color="white")
+    ax.tick_params(colors="white")
+    ax.set_facecolor("black")
+    plt.tight_layout()
+    fig.savefig(image_filename, dpi=300, facecolor=fig.get_facecolor(), bbox_inches="tight")
+    plt.close(fig)
+    print(f"Line mask image saved to {image_filename}")
+
+
+def save_line_info(
+    info_filename,
+    *,
+    line_label,
+    keep_line,
+    line_radius,
+    width,
+    height,
+    input_filename,
+    output_filename,
+    total_events,
+    kept_events,
+    kept_event_pixels,
+    kept_iet_pixels,
+    kept_iets,
+):
+    x0, y0, x1, y1 = keep_line
+    lines = [
+        f"line_label: {line_label}",
+        f"x0: {x0}",
+        f"y0: {y0}",
+        f"x1: {x1}",
+        f"y1: {y1}",
+        f"line_radius: {line_radius}",
+        f"sensor_width: {width}",
+        f"sensor_height: {height}",
+        f"total_events: {total_events}",
+        f"kept_events: {kept_events}",
+        f"kept_event_pixels: {kept_event_pixels}",
+        f"kept_iet_pixels: {kept_iet_pixels}",
+        f"kept_iets: {kept_iets}",
+        f"input_events: {input_filename}",
+        f"output_iet: {output_filename}",
+    ]
+    Path(info_filename).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"Line metadata saved to {info_filename}")
     
 
 if __name__ == "__main__":
@@ -141,6 +233,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_filename", type=str, default=None, help="Custom output filename for the generated IET .pkl file.")
     parser.add_argument("--keep_line", type=int, nargs=4, metavar=("X0", "Y0", "X1", "Y1"), help="Keep IETs only along this pixel line and clear all other pixels.")
     parser.add_argument("--line_radius", type=int, default=0, help="Optional radius around --keep_line pixels to keep.")
+    parser.add_argument("--line", type=int, default=None, help="Use line-filtered events file with the specified line number (e.g., --line 1 for line1.csv).")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
@@ -158,6 +251,7 @@ if __name__ == "__main__":
         duration=SIM_DURATION,
         slice_name=args.slice_name,
         polarity=args.polarity,
+        line=args.line,
     )
     context = fm.context_from_path(
         filename,
@@ -170,14 +264,70 @@ if __name__ == "__main__":
     dataset = context["dataset"]
     slice_name = context["slice_name"]
     event_stem = Path(filename).stem
+    line_label = None
     
     event_data = pd.read_csv(filename)
 
     # Assuming 'event_data' is your DataFrame from previous steps
     iet_spatial_grid = create_iet_grid(event_data, SENSOR_WIDTH, SENSOR_HEIGHT)
 
+    # Save it so you don't have to re-process the CSV next time
+    if args.output_filename is not None:
+        output_filename = Path(args.output_filename)
+    else:
+        output_stem = event_stem
+        if args.keep_line is not None:
+            base_output = fm.iet_file(
+                data_root=args.data_root,
+                source=source,
+                dataset=dataset,
+                rate=LAMBDA_RATE,
+                duration=SIM_DURATION,
+                stem=event_stem,
+                slice_name=slice_name,
+                polarity=args.polarity,
+                create_parent=True,
+            )
+            base_stem = base_output.stem
+            if base_stem.endswith("_iet"):
+                base_stem = base_stem[:-4]
+            line_label = next_line_label(base_output.parent, base_stem)
+            output_stem = f"{event_stem}_line{line_label}"
+        output_filename = fm.iet_file(
+            data_root=args.data_root,
+            source=source,
+            dataset=dataset,
+            rate=LAMBDA_RATE,
+            duration=SIM_DURATION,
+            stem=output_stem,
+            slice_name=slice_name,
+            polarity=args.polarity,
+            create_parent=True,
+        )
+
     if args.keep_line is not None:
         x0, y0, x1, y1 = args.keep_line
+        kept_event_pixels = line_keep_pixels(
+            x0,
+            y0,
+            x1,
+            y1,
+            SENSOR_WIDTH,
+            SENSOR_HEIGHT,
+            line_radius=args.line_radius,
+        )
+        kept_event_count = sum(
+            1
+            for x, y in zip(event_data["x"], event_data["y"])
+            if (int(x), int(y)) in kept_event_pixels
+        )
+        kept_event_pixel_count = len(
+            {
+                (int(x), int(y))
+                for x, y in zip(event_data["x"], event_data["y"])
+                if (int(x), int(y)) in kept_event_pixels
+            }
+        )
         iet_spatial_grid = zero_iets_except_line(
             iet_spatial_grid,
             x0,
@@ -186,23 +336,32 @@ if __name__ == "__main__":
             y1,
             line_radius=args.line_radius,
         )
-    
-    # Save it so you don't have to re-process the CSV next time
-    output_filename = (
-        Path(args.output_filename)
-        if args.output_filename is not None
-        else fm.iet_file(
-            data_root=args.data_root,
-            source=source,
-            dataset=dataset,
-            rate=LAMBDA_RATE,
-            duration=SIM_DURATION,
-            stem=event_stem,
-            slice_name=slice_name,
-            polarity=args.polarity,
-            create_parent=True,
+        info_filename = output_filename.with_name(output_filename.stem.removesuffix("_iet") + "_info.txt")
+        image_filename = output_filename.with_name(output_filename.stem.removesuffix("_iet") + ".png")
+        save_line_info(
+            info_filename,
+            line_label=line_label or "custom",
+            keep_line=args.keep_line,
+            line_radius=args.line_radius,
+            width=SENSOR_WIDTH,
+            height=SENSOR_HEIGHT,
+            input_filename=filename,
+            output_filename=output_filename,
+            total_events=len(event_data),
+            kept_events=kept_event_count,
+            kept_event_pixels=kept_event_pixel_count,
+            kept_iet_pixels=sum(1 for row in iet_spatial_grid for values in row if len(values) > 0),
+            kept_iets=count_grid_iets(iet_spatial_grid),
         )
-    )
+        save_line_mask_image(
+            image_filename,
+            kept_event_pixels,
+            SENSOR_WIDTH,
+            SENSOR_HEIGHT,
+            args.keep_line,
+            args.line_radius,
+        )
+    
     save_iet_grid(iet_spatial_grid, output_filename)
 
     # --- Example Analysis Usage ---

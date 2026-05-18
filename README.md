@@ -14,13 +14,22 @@ Examples:
 
 <code>data/noise/1.0Hz/iets/poisson_noise_1.0Hz_20.0s_iet.pkl</code>
 
-<code>data/object/45Hz/2.67_2.71/pictures/45Hz_2.67_2.71_ON_iet_hist.png</code>
+<code>data/object/45/2.67_2.71/pictures/45_2.67_2.71_ON_iet_hist.png</code>
 
 You can ask the manager for a path directly:
 
 <code>python file_manager.py --source noise --artifact events --rate 1.0 --duration 20.0</code>
 
 The old <code>--folder</code> argument is still accepted as an alias for <code>--data_root</code>.
+
+### Analysis
+Build an inter-event-time grid from a managed event CSV:
+
+<code>python iets.py --source object --dataset 45 --slice 2.67_2.71 --polarity ON --data_root data</code>
+
+Generate IET histogram graphs from the saved grid:
+
+<code>python graphs.py --source object --dataset 45 --slice 2.67_2.71 --polarity ON --min_iet 0.00001 --max_iet 1 --data_root data</code>
 
 ### Noise
 ##### Generation
@@ -42,15 +51,15 @@ We can also use the same duration and vary the rate: <code>python noise_gen_pipe
 ### Object
 #### Raindrops dataset 
 ##### Format Conversion
-.aedat to .csv conversion using <code>python object/aedat_to_csv.py --aedat 30Hz,45Hz --data_root data</code>
+.aedat to .csv conversion using <code>python object/aedat_to_csv.py --aedat 30,45 --data_root data</code>
 
 The converter looks first in the managed events folder, then falls back to legacy locations such as <code>object/45Hz.aedat</code>.
 
 ##### Grab a time slice and polarities
-<code>python object/iso_pol.py --source object --dataset 45Hz --mintime 2.67 --maxtime 2.71</code>
+<code>python object/isolate.py --source object --dataset 45 --mintime 2.67 --maxtime 2.71</code>
 
 ##### Visualize in video
-visualize using <code>python ./visualize.py --source object --dataset 45Hz --duration 5 --fps 100</code>
+visualize using <code>python ./visualize.py --source object --dataset 45 --duration 5 --fps 100</code>
 
 ##### Grab a snippet
-<code>python ./visualize.py --source object --dataset 45Hz --duration 5 --video .03 --fps 2500 --start 2.67 --slowdown 25</code>
+<code>python ./visualize.py --source object --dataset 45 --duration .02 --fps 2500 --start .99 --slowdown 25</code>

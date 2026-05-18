@@ -90,7 +90,7 @@ def plot_frequency_pdf(
         print("No valid frequency data to plot.")
         return
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(8, 5))
     
     # Create logarithmically spaced bins between the min and max frequencies
     if min is not None and max is not None:
@@ -185,7 +185,7 @@ def plot_overall_iet_histogram(
     if len(valid_iets) == 0:
         print("No valid IET data to plot.")
         return
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(8, 5))
     
     # Create bins for the Time (X) axis
     if min is not None and max is not None:
@@ -302,11 +302,13 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", "--set", "--name", dest="dataset", type=str, default=None, help="Dataset folder name. Defaults to '<rate>Hz' for noise.")
     parser.add_argument("--slice", dest="slice_name", type=str, default=None, help="Optional time-slice folder name, for example 2.67_2.71.")
     parser.add_argument("--polarity", choices=["ON", "OFF"], default=None, help="Optional polarity suffix for object IET files.")
+    parser.add_argument("--line", type=int, default=None, help="Optional keep_line label to graph, for example --line 1.")
     parser.add_argument("--no_show", action="store_true", help="Suppress showing the animation.")
     parser.add_argument("--filename", type=str, default=None, help="Custom filename prefix (without extension) for the generated CSV and video. If not provided, it will be auto-generated based on rate and duration.")
     parser.add_argument("--no_expected", action="store_true", help="Suppress expected curve overlays on the plots.")
     parser.add_argument("--min_iet", type=float, default=1e-4, help="Minimum IET to consider for plotting (default: 1e-4 seconds).")
-    parser.add_argument("--max_iet", type=float, default=10.0, help="Maximum IET to consider for plotting (default: 100 seconds).")
+    parser.add_argument("--max_iet", type=float, default=1.0, help="Maximum IET to consider for plotting (default: 100 seconds).")
+    parser.add_argument("--bins_per_decade", type=int, default=100, help="Number of bins per decade for the histogram (default: 100).")
     args = parser.parse_args()
 
     SENSOR_WIDTH = args.width
@@ -315,6 +317,23 @@ if __name__ == "__main__":
     LAMBDA_RATE = args.rate
     MIN_RES = 1e-5
     source = args.source or fm.SOURCE_NOISE
+    iet_stem = None
+    if args.line is not None:
+        if args.line < 1:
+            raise ValueError("--line must be 1 or greater.")
+        base_iet = fm.iet_file(
+            data_root=args.data_root,
+            source=source,
+            dataset=args.dataset,
+            rate=LAMBDA_RATE,
+            duration=SIM_DURATION,
+            slice_name=args.slice_name,
+            polarity=args.polarity,
+        )
+        base_stem = base_iet.stem
+        if base_stem.endswith("_iet"):
+            base_stem = base_stem[:-4]
+        iet_stem = f"{base_stem}_line{args.line}"
     filename = fm.find_iet_file(
         filename=args.filename,
         data_root=args.data_root,
@@ -322,6 +341,7 @@ if __name__ == "__main__":
         dataset=args.dataset,
         rate=LAMBDA_RATE,
         duration=SIM_DURATION,
+        stem=iet_stem,
         slice_name=args.slice_name,
         polarity=args.polarity,
     )
@@ -369,7 +389,7 @@ if __name__ == "__main__":
 
     # Graph the overall IET distribution
     args.min_iet = max(args.min_iet, MIN_RES)
-    num_bins = int(math.log10(args.max_iet / args.min_iet) * 100 + 1.5)
+    num_bins = int(math.log10(args.max_iet / args.min_iet) * args.bins_per_decade + 1.5)
 
     expected_shape = None if args.no_expected or args.expected_shape == 'none' else args.expected_shape
 

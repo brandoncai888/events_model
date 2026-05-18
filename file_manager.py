@@ -30,7 +30,7 @@ def number_label(value):
         return None
     if isinstance(value, str):
         return value.strip()
-    return str(float(value))
+    return str(round(float(value), 12))
 
 
 def hz_label(rate):
@@ -106,6 +106,12 @@ def slice_from_window(start, end, slice_name=None):
     return time_slice_name(start, end)
 
 
+def stem_has_part(stem, part):
+    stem = str(stem)
+    part = clean_part(part)
+    return stem == part or stem.endswith(f"_{part}") or f"_{part}_" in stem
+
+
 def artifact_dir(
     artifact,
     *,
@@ -147,6 +153,7 @@ def dataset_stem(
     slice_start=None,
     slice_end=None,
     polarity=None,
+    line=None,
 ):
     source = normalize_source(source)
     if stem is not None:
@@ -157,15 +164,20 @@ def dataset_stem(
         base = default_dataset(source, dataset=dataset, name=name, rate=rate)
 
     time_slice = time_slice_name(slice_start, slice_end, slice_name=slice_name)
-    if time_slice and not base.endswith(f"_{time_slice}"):
+    if time_slice and not stem_has_part(base, time_slice):
         base = f"{base}_{time_slice}"
 
     if polarity:
         polarity = str(polarity).upper()
         if polarity not in {"ON", "OFF"}:
             raise ValueError("polarity must be ON or OFF.")
-        if not base.endswith(f"_{polarity}"):
+        if not stem_has_part(base, polarity):
             base = f"{base}_{polarity}"
+
+    if line is not None:
+        line_label = f"line{int(line)}"
+        if not stem_has_part(base, line_label):
+            base = f"{base}_{line_label}"
 
     return clean_part(base)
 
@@ -186,6 +198,7 @@ def managed_file(
     slice_start=None,
     slice_end=None,
     polarity=None,
+    line=None,
     create_parent=False,
 ):
     base = dataset_stem(
@@ -199,6 +212,7 @@ def managed_file(
         slice_start=slice_start,
         slice_end=slice_end,
         polarity=polarity,
+        line=line,
     )
     if suffix:
         base = f"{base}_{clean_part(suffix)}"
