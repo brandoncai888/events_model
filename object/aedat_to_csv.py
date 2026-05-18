@@ -1,8 +1,12 @@
 import argparse
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import pandas as pd
+import file_manager as fm
 
 
 def aedat2_to_csv(input_path, output_path, camera='davis346'):
@@ -69,12 +73,27 @@ if __name__ == "__main__":
         required=True,
         help="Comma-separated .aedat files: events1,events2",
     )
-    parser.add_argument("--folder", type=str, default="data", help="Base folder to find .aedat files and save CSVs")
+    parser.add_argument("--data_root", "--folder", dest="data_root", type=str, default=fm.DEFAULT_DATA_ROOT, help="Root folder for managed data files (default: data).")
     parser.add_argument("--camera", type=str, default="davis346", help="Camera address layout: davis346 or dvs128")
     args = parser.parse_args()
 
     for aedat_file in args.aedat:
-        input_file = Path(args.folder) / f"{aedat_file}.aedat"
-        output_file = Path(args.folder) / f"{aedat_file}.csv"
+        raw_path = Path(aedat_file)
+        explicit_input = raw_path if raw_path.parent != Path(".") else None
+        dataset = raw_path.stem
+        input_file = fm.find_events_file(
+            extension=".aedat",
+            filename=explicit_input,
+            data_root=args.data_root,
+            source=fm.SOURCE_OBJECT,
+            dataset=dataset,
+        )
+        output_file = fm.events_file(
+            extension=".csv",
+            data_root=args.data_root,
+            source=fm.SOURCE_OBJECT,
+            dataset=dataset,
+            create_parent=True,
+        )
         print(f"\n\nProcessing {input_file}...")
         aedat2_to_csv(input_file, output_file, camera=args.camera)

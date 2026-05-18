@@ -1,14 +1,15 @@
 import argparse
 import subprocess
 import sys
-import os
+
+import file_manager as fm
 
 
 def parse_float_list(value):
     return [float(item.strip()) for item in value.split(",") if item.strip()]
 
 
-def run_step(script, rate, duration, width, height, folder, video=None):
+def run_step(script, rate, duration, width, height, data_root, video=None):
     command = [
         sys.executable,
         "-m",
@@ -21,8 +22,8 @@ def run_step(script, rate, duration, width, height, folder, video=None):
         str(width),
         "--height",
         str(height),
-        "--folder",
-        folder,
+        "--data_root",
+        data_root,
         "--no_show",
     ]
     if video is not None:
@@ -48,7 +49,7 @@ def main():
     parser.add_argument("--width", type=int, default=346, help="Sensor width in pixels.")
     parser.add_argument("--height", type=int, default=260, help="Sensor height in pixels.")
     parser.add_argument("--paired", action="store_true", help="Pair rates and durations by index instead of running every combination.")
-    parser.add_argument("--folder", type=str, default="data", help="Base folder to save results (default: 'data').")
+    parser.add_argument("--data_root", "--folder", dest="data_root", type=str, default=fm.DEFAULT_DATA_ROOT, help="Root folder for managed data files (default: data).")
     parser.add_argument("--video", type=float, default=0.0, help="Duration in seconds for the generated video (default: 0.0 = no video).")
     args = parser.parse_args()
 
@@ -61,11 +62,11 @@ def main():
 
     for rate, duration in runs:
         print(f"\n\n\n=== Pipeline: rate={rate} Hz, duration={duration}s ===")
-        run_step("noise.generate_poisson", rate, duration, args.width, args.height, args.folder)
+        run_step("noise.generate_poisson", rate, duration, args.width, args.height, args.data_root)
         if args.video > 0:
-            run_step("visualize", rate, duration, args.width, args.height, args.folder, video=args.video)
-        run_step("noise.inter_event_time", rate, duration, args.width, args.height, args.folder)
-        run_step("noise.graphs", rate, duration, args.width, args.height, args.folder)
+            run_step("visualize", rate, duration, args.width, args.height, args.data_root, video=args.video)
+        run_step("noise.inter_event_time", rate, duration, args.width, args.height, args.data_root)
+        run_step("noise.graphs", rate, duration, args.width, args.height, args.data_root)
 
 
 if __name__ == "__main__":

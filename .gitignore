@@ -1,5 +1,5 @@
-*s.csv
-*z.csv
+
+*.csv
 *.aedat
 *.pkl
 *.mp4

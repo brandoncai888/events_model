@@ -1,0 +1,16 @@
+line_label: 2
+x0: 245
+y0: 230
+x1: 240
+y1: 200
+line_radius: 5
+sensor_width: 346
+sensor_height: 260
+total_events: 7971025
+kept_events: 1038
+kept_event_pixels: 411
+input_events: data\object\50\events\50.csv
+output_events_all: data\object\50\2.65_2.7\events\50_2.65_2.7_line2.csv
+output_events_ON: data\object\50\2.65_2.7\events\50_2.65_2.7_ON_line2.csv
+output_events_OFF: data\object\50\2.65_2.7\events\50_2.65_2.7_OFF_line2.csv
+line_mask_image: data\object\50\2.65_2.7\pictures\50_2.65_2.7_line2_line_mask.png

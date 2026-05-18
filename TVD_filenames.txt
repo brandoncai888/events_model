@@ -1,16 +1,12 @@
-data/poisson_noise_0.1Hz_400.0s_iet_hist.csv
-data/poisson_noise_0.2Hz_200.0s_iet_hist.csv
-data/poisson_noise_0.4Hz_100.0s_iet_hist.csv
-data/poisson_noise_1.0Hz_40.0s_iet_hist.csv
-data/poisson_noise_2.0Hz_20.0s_iet_hist.csv
-data/poisson_noise_4.0Hz_10.0s_iet_hist.csv
-data/poisson_noise_10.0Hz_4.0s_iet_hist.csv
+data/noise/0.1Hz/pictures/poisson_noise_0.1Hz_400.0s_iet_hist.csv
+data/noise/0.2Hz/pictures/poisson_noise_0.2Hz_200.0s_iet_hist.csv
+data/noise/0.4Hz/pictures/poisson_noise_0.4Hz_100.0s_iet_hist.csv
+data/noise/1.0Hz/pictures/poisson_noise_1.0Hz_40.0s_iet_hist.csv
+data/noise/2.0Hz/pictures/poisson_noise_2.0Hz_20.0s_iet_hist.csv
+data/noise/4.0Hz/pictures/poisson_noise_4.0Hz_10.0s_iet_hist.csv
+data/noise/10.0Hz/pictures/poisson_noise_10.0Hz_4.0s_iet_hist.csv
 
 
-data2/poisson_noise_0.1Hz_20.0s_iet_hist.csv
-data2/poisson_noise_0.2Hz_20.0s_iet_hist.csv
-data2/poisson_noise_0.4Hz_20.0s_iet_hist.csv
-data2/poisson_noise_1.0Hz_20.0s_iet_hist.csv
-data2/poisson_noise_2.0Hz_20.0s_iet_hist.csv
-data2/poisson_noise_4.0Hz_20.0s_iet_hist.csv
-data2/poisson_noise_10.0Hz_20.0s_iet_hist.csv
+data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line2_iet_hist.csv
+data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line3_iet_hist.csv
+data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line4_iet_hist.csv
