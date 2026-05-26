@@ -1,6 +1,7 @@
 import pandas as pd
 
 import argparse
+from pathlib import Path
 
 import file_manager as fm
 
@@ -54,6 +55,19 @@ def managed_filenames(args):
     ]
 
 
+def resolve_csv_filename(filename):
+    path = Path(filename)
+    if path.suffix.lower() == ".csv":
+        return path
+
+    csv_path = path.with_suffix(".csv")
+    if csv_path.exists():
+        print(f"Using CSV beside plot image: {csv_path}")
+        return csv_path
+
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser(description="Calculate TVD for plotted binned-value CSVs.")
     parser.add_argument("--filenames", type=str, default="TVD_filenames.txt", help="Text file containing CSV paths, one per line.")
@@ -77,7 +91,14 @@ def main():
         if not filename:
             tvd_values.append(None)
             continue
-        df = pd.read_csv(filename)
+        csv_filename = resolve_csv_filename(filename)
+        if csv_filename.suffix.lower() != ".csv":
+            print(f"Skipping non-CSV file with no sibling CSV: {filename}")
+            tvd_values.append(None)
+            max_file_len = max(max_file_len, len(filename))
+            continue
+
+        df = pd.read_csv(csv_filename)
         tvd = calculate_tvd(df)
         tvd_values.append(tvd)
         max_file_len = max(max_file_len, len(filename))

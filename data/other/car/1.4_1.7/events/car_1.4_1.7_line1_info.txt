@@ -1,0 +1,16 @@
+line_label: 1
+x0: 0
+y0: 50
+x1: 100
+y1: 50
+line_radius: 5
+sensor_width: 1280
+sensor_height: 720
+total_events: 3397511
+kept_events: 15415
+kept_event_pixels: 884
+input_events: data\other\car\events\car.csv
+output_events_all: data\other\car\1.4_1.7\events\car_1.4_1.7_line1.csv
+output_events_ON: data\other\car\1.4_1.7\events\car_1.4_1.7_ON_line1.csv
+output_events_OFF: data\other\car\1.4_1.7\events\car_1.4_1.7_OFF_line1.csv
+line_mask_image: data\other\car\1.4_1.7\pictures\car_1.4_1.7_line1_line_mask.png

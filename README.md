@@ -6,7 +6,7 @@ For managed noise graph CSVs, you can also build the filenames automatically: <c
 ### Managed file layout
 All scripts now use <code>file_manager.py</code> for data paths:
 
-<code>data/(noise or object)/(frequency or name)/(optional time-slice)/(events or iets or pictures or videos)/(file)</code>
+<code>data/(noise or object)/(frequency or name)/(optional time-slice)/(events or iets or pictures or videos or tracks)/(file)</code>
 
 Examples:
 
@@ -30,6 +30,18 @@ Build an inter-event-time grid from a managed event CSV:
 Generate IET histogram graphs from the saved grid:
 
 <code>python graphs.py --source object --dataset 45 --slice 2.67_2.71 --polarity ON --min_iet 0.00001 --max_iet 1 --data_root data</code>
+
+Track event center-of-mass motion in 1 ms windows:
+
+<code>python center_of_mass.py --source object --dataset 45 --slice 2.67_2.71 --polarity ON --window 0.001 --data_root data</code>
+
+This writes COM snapshot and velocity CSVs under the managed <code>tracks</code> folder. Velocity is reported as <code>vx_pixels_per_s</code>, <code>vy_pixels_per_s</code>, and <code>speed_pixels_per_s</code>.
+
+Use COM velocity to predict neighboring-pixel event timing and plot residuals:
+
+<code>python neighbor_time_prediction.py --source object --dataset 45 --slice 2.67_2.71 --polarity ON --window 0.001 --axis x --data_root data</code>
+
+By default, positive <code>vx</code> predicts the pixel to the right and negative <code>vx</code> predicts the pixel to the left, with <code>predicted_dt = 1 / abs(vx)</code>. The actual event is the neighbor-pixel event nearest to <code>event_t + predicted_dt</code> in time. The residual plot includes negative residuals down to <code>-0.001s</code>, shows the average projected speed in the title, and marks both zero residual and mean residual as vertical lines; use <code>--min_residual</code> and <code>--max_residual</code> to change the range. Use <code>--dx 1 --dy 0</code> to force a right-neighbor prediction.
 
 ### Noise
 ##### Generation

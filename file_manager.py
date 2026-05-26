@@ -3,17 +3,18 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-
 DEFAULT_DATA_ROOT = "data"
 SOURCE_NOISE = "noise"
 SOURCE_OBJECT = "object"
-SOURCES = (SOURCE_NOISE, SOURCE_OBJECT)
+SOURCE_OTHER = "other"
+SOURCES = (SOURCE_NOISE, SOURCE_OBJECT, SOURCE_OTHER)
 
 ARTIFACT_EVENTS = "events"
 ARTIFACT_IETS = "iets"
 ARTIFACT_PICTURES = "pictures"
 ARTIFACT_VIDEOS = "videos"
-ARTIFACTS = (ARTIFACT_EVENTS, ARTIFACT_IETS, ARTIFACT_PICTURES, ARTIFACT_VIDEOS)
+ARTIFACT_TRACKS = "tracks"
+ARTIFACTS = (ARTIFACT_EVENTS, ARTIFACT_IETS, ARTIFACT_PICTURES, ARTIFACT_VIDEOS, ARTIFACT_TRACKS)
 
 
 @dataclass(frozen=True)
@@ -251,6 +252,33 @@ def picture_file(picture_name, extension=".png", **kwargs):
 
 def video_file(video_name="animation", **kwargs):
     return managed_file(ARTIFACT_VIDEOS, ".mp4", suffix=video_name, **kwargs)
+
+
+def track_file(track_name, extension=".csv", **kwargs):
+    return managed_file(ARTIFACT_TRACKS, extension, suffix=track_name, **kwargs)
+
+
+def center_of_mass_file(extension=".csv", **kwargs):
+    return track_file("center_of_mass", extension=extension, **kwargs)
+
+
+def center_of_mass_velocity_file(extension=".csv", **kwargs):
+    return track_file("center_of_mass_velocity", extension=extension, **kwargs)
+
+
+def find_track_file(track_name, extension=".csv", filename=None, **kwargs):
+    if filename is not None:
+        return Path(filename)
+    preferred = track_file(track_name, extension=extension, **kwargs)
+    stem = preferred.stem
+    source = normalize_source(kwargs.get("source"))
+    data_root = kwargs.get("data_root", DEFAULT_DATA_ROOT)
+    return first_existing_or_preferred(
+        preferred,
+        Path(data_root) / f"{stem}{preferred.suffix}",
+        Path(source) / f"{stem}{preferred.suffix}",
+        Path(f"{stem}{preferred.suffix}"),
+    )
 
 
 def parse_managed_path(path, data_root=DEFAULT_DATA_ROOT):
