@@ -1,4 +1,5 @@
 import argparse
+import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -6,6 +7,9 @@ import numpy as np
 import pandas as pd
 
 import file_manager as fm
+
+
+LINE_SUFFIX_RE = re.compile(r"_line\d+$")
 
 
 def load_events_csv(csv_path):
@@ -74,25 +78,23 @@ def _signed_step(values):
 
 def add_neighbor_predictions(events, width, height, axis="x", dx=None, dy=None, min_speed=1e-9):
     predicted = events.copy()
+    vx = predicted["vx_pixels_per_s"]
+    vy = predicted["vy_pixels_per_s"]
 
     if dx is None and dy is None:
         if axis == "x":
-            speed_component = predicted["vx_pixels_per_s"].abs()
-            neighbor_dx = _signed_step(predicted["vx_pixels_per_s"].fillna(0.0))
+            speed_component = vx.abs()
+            neighbor_dx = _signed_step(vx.fillna(0.0))
             neighbor_dy = np.zeros(len(predicted), dtype=int)
         elif axis == "y":
-            speed_component = predicted["vy_pixels_per_s"].abs()
+            speed_component = vy.abs()
             neighbor_dx = np.zeros(len(predicted), dtype=int)
-            neighbor_dy = _signed_step(predicted["vy_pixels_per_s"].fillna(0.0))
+            neighbor_dy = _signed_step(vy.fillna(0.0))
         else:
-            use_x = predicted["vx_pixels_per_s"].abs() >= predicted["vy_pixels_per_s"].abs()
-            neighbor_dx = np.where(use_x, _signed_step(predicted["vx_pixels_per_s"].fillna(0.0)), 0)
-            neighbor_dy = np.where(use_x, 0, _signed_step(predicted["vy_pixels_per_s"].fillna(0.0)))
-            speed_component = np.where(
-                use_x,
-                predicted["vx_pixels_per_s"].abs(),
-                predicted["vy_pixels_per_s"].abs(),
-            )
+            use_x = vx.abs() >= vy.abs()
+            neighbor_dx = np.where(use_x, _signed_step(vx.fillna(0.0)), 0)
+            neighbor_dy = np.where(use_x, 0, _signed_step(vy.fillna(0.0)))
+            speed_component = np.where(use_x, vx.abs(), vy.abs())
         distance_pixels = 1.0
     else:
         dx = 0 if dx is None else int(dx)
@@ -102,9 +104,7 @@ def add_neighbor_predictions(events, width, height, axis="x", dx=None, dy=None, 
         neighbor_dx = np.full(len(predicted), dx, dtype=int)
         neighbor_dy = np.full(len(predicted), dy, dtype=int)
         distance_pixels = float(np.hypot(dx, dy))
-        speed_component = (
-            predicted["vx_pixels_per_s"] * dx + predicted["vy_pixels_per_s"] * dy
-        ) / distance_pixels
+        speed_component = (vx * dx + vy * dy) / distance_pixels
 
     predicted["event_x"] = np.rint(predicted["x"]).astype(int)
     predicted["event_y"] = np.rint(predicted["y"]).astype(int)
@@ -236,7 +236,7 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
     )
     ax.set_title(
         "Neighbor Event Timing Residuals\n"
-        f"Mean projected speed: {mean_speed:.3g} pixels/s"
+        f"Mean projected speed: {mean_speed:.3g} pixels/s ({(1/mean_speed) if mean_speed > 0 else float('nan'):.3g} seconds between neighbors)"
     )
     ax.set_xlabel("actual_dt - predicted_dt (seconds)")
     ax.set_ylabel("Count")
@@ -267,7 +267,11 @@ def neighbor_label(args):
     return f"auto_{args.axis}"
 
 
-def resolve_paths(args, source, dataset, slice_name, event_stem):
+def stem_without_line(stem):
+    return LINE_SUFFIX_RE.sub("", str(stem))
+
+
+def resolve_velocity_path(args, source, dataset, slice_name, event_stem):
     velocity_name = f"center_of_mass_velocity_{fm.seconds_label(args.window)}"
     velocity_path = fm.find_track_file(
         velocity_name,
@@ -282,6 +286,30 @@ def resolve_paths(args, source, dataset, slice_name, event_stem):
         polarity=args.polarity,
         line=args.line,
     )
+    if args.velocity_filename is not None or velocity_path.exists() or args.line is None:
+        return velocity_path
+
+    fallback_path = fm.find_track_file(
+        velocity_name,
+        data_root=args.data_root,
+        source=source,
+        dataset=dataset,
+        rate=args.rate,
+        duration=args.duration,
+        stem=stem_without_line(event_stem),
+        slice_name=slice_name,
+        polarity=args.polarity,
+        line=None,
+    )
+    if fallback_path.exists():
+        print(f"Line-specific velocity file not found; using full COM velocity file: {fallback_path}")
+        return fallback_path
+
+    return velocity_path
+
+
+def resolve_paths(args, source, dataset, slice_name, event_stem):
+    velocity_path = resolve_velocity_path(args, source, dataset, slice_name, event_stem)
 
     output_name = f"neighbor_time_residual_{fm.seconds_label(args.window)}_{neighbor_label(args)}"
     if args.output:
