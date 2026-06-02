@@ -139,6 +139,33 @@ def pixel_time_lookup(events):
     return lookup
 
 
+def add_event_count_columns(predictions, events):
+    counts = (
+        events.assign(
+            event_x=np.rint(events["x"]).astype(int),
+            event_y=np.rint(events["y"]).astype(int),
+        )
+        .groupby(["event_x", "event_y"])
+        .size()
+        .rename("event_count")
+        .reset_index()
+    )
+    above_counts = counts.rename(
+        columns={
+            "event_x": "above_x",
+            "event_y": "above_y",
+            "event_count": "above_event_count",
+        }
+    )
+
+    predictions = predictions.copy()
+    predictions["above_x"] = predictions["event_x"]
+    predictions["above_y"] = predictions["event_y"] - 1
+    predictions = predictions.merge(counts, on=["event_x", "event_y"], how="left")
+    predictions = predictions.merge(above_counts, on=["above_x", "above_y"], how="left")
+    return predictions
+
+
 def add_actual_neighbor_times(predictions, events):
     lookup = pixel_time_lookup(events)
     actual_times = np.full(len(predictions), np.nan, dtype=float)
@@ -165,7 +192,17 @@ def add_actual_neighbor_times(predictions, events):
     return predictions
 
 
-def prediction_residuals(events, velocities, width, height, axis="x", dx=None, dy=None, min_speed=1e-9):
+def prediction_residuals(
+    events,
+    velocities,
+    width,
+    height,
+    axis="x",
+    dx=None,
+    dy=None,
+    min_speed=1e-9,
+    require_above_equal_events=False,
+):
     events_with_velocity = attach_velocity_windows(events, velocities)
     predictions = add_neighbor_predictions(
         events_with_velocity,
@@ -176,6 +213,13 @@ def prediction_residuals(events, velocities, width, height, axis="x", dx=None, d
         dy=dy,
         min_speed=min_speed,
     )
+    if require_above_equal_events:
+        predictions = add_event_count_columns(predictions, events)
+        predictions = predictions[
+            predictions["event_count"].notna()
+            & predictions["above_event_count"].notna()
+            & (predictions["event_count"] == predictions["above_event_count"])
+        ].copy()
     residuals = add_actual_neighbor_times(predictions, events)
     columns = [
         "window_index",
@@ -191,6 +235,8 @@ def prediction_residuals(events, velocities, width, height, axis="x", dx=None, d
         "neighbor_dy",
         "target_x",
         "target_y",
+        "event_count",
+        "above_event_count",
         "velocity_component_pixels_per_s",
         "predicted_dt",
         "predicted_t",
@@ -370,6 +416,11 @@ def main():
     parser.add_argument("--dx", type=int, default=None, help="Explicit neighbor x offset.")
     parser.add_argument("--dy", type=int, default=None, help="Explicit neighbor y offset.")
     parser.add_argument("--min_speed", type=float, default=1e-9, help="Minimum projected speed to make a prediction.")
+    parser.add_argument(
+        "--require_above_equal_events",
+        action="store_true",
+        help="Only calculate residuals for pixels whose above neighbor has the same total event count.",
+    )
     parser.add_argument("--bins", type=int, default=100, help="Histogram bins.")
     parser.add_argument("--min_residual", type=float, default=-0.001, help="Minimum residual to plot.")
     parser.add_argument("--max_residual", type=float, default=None, help="Maximum residual to plot.")
@@ -417,6 +468,7 @@ def main():
         dx=args.dx,
         dy=args.dy,
         min_speed=args.min_speed,
+        require_above_equal_events=args.require_above_equal_events,
     )
     if residuals.empty:
         raise ValueError("No neighbor timing residuals were generated. Check velocity direction, line, and event density.")

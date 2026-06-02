@@ -93,24 +93,48 @@ def center_of_mass_velocities(snapshots):
     velocities["prev_center_t"] = velocities["center_t"].shift(1)
     velocities["prev_com_x"] = velocities["com_x"].shift(1)
     velocities["prev_com_y"] = velocities["com_y"].shift(1)
-    velocities["dt"] = velocities["center_t"] - velocities["prev_center_t"]
+    velocities["next_center_t"] = velocities["center_t"].shift(-1)
+    velocities["next_com_x"] = velocities["com_x"].shift(-1)
+    velocities["next_com_y"] = velocities["com_y"].shift(-1)
+    velocities["prev_dt"] = velocities["center_t"] - velocities["prev_center_t"]
+    velocities["next_dt"] = velocities["next_center_t"] - velocities["center_t"]
 
-    valid = (
-        velocities["dt"].notna()
-        & (velocities["dt"] > 0)
+    prev_valid = (
+        velocities["prev_dt"].notna()
+        & (velocities["prev_dt"] > 0)
         & velocities["com_x"].notna()
         & velocities["com_y"].notna()
         & velocities["prev_com_x"].notna()
         & velocities["prev_com_y"].notna()
     )
+    next_valid = (
+        velocities["next_dt"].notna()
+        & (velocities["next_dt"] > 0)
+        & velocities["com_x"].notna()
+        & velocities["com_y"].notna()
+        & velocities["next_com_x"].notna()
+        & velocities["next_com_y"].notna()
+    )
+    prev_vx = (velocities["com_x"] - velocities["prev_com_x"]) / velocities["prev_dt"]
+    prev_vy = (velocities["com_y"] - velocities["prev_com_y"]) / velocities["prev_dt"]
+    next_vx = (velocities["next_com_x"] - velocities["com_x"]) / velocities["next_dt"]
+    next_vy = (velocities["next_com_y"] - velocities["com_y"]) / velocities["next_dt"]
+    prev_vx = prev_vx.where(prev_valid)
+    prev_vy = prev_vy.where(prev_valid)
+    next_vx = next_vx.where(next_valid)
+    next_vy = next_vy.where(next_valid)
+
+    velocities["dt"] = pd.concat(
+        [
+            velocities["prev_dt"].where(prev_valid),
+            velocities["next_dt"].where(next_valid),
+        ],
+        axis=1,
+    ).mean(axis=1)
     velocities["vx_pixels_per_s"] = np.nan
     velocities["vy_pixels_per_s"] = np.nan
-    velocities.loc[valid, "vx_pixels_per_s"] = (
-        velocities.loc[valid, "com_x"] - velocities.loc[valid, "prev_com_x"]
-    ) / velocities.loc[valid, "dt"]
-    velocities.loc[valid, "vy_pixels_per_s"] = (
-        velocities.loc[valid, "com_y"] - velocities.loc[valid, "prev_com_y"]
-    ) / velocities.loc[valid, "dt"]
+    velocities["vx_pixels_per_s"] = pd.concat([prev_vx, next_vx], axis=1).mean(axis=1)
+    velocities["vy_pixels_per_s"] = pd.concat([prev_vy, next_vy], axis=1).mean(axis=1)
     velocities["speed_pixels_per_s"] = np.hypot(
         velocities["vx_pixels_per_s"],
         velocities["vy_pixels_per_s"],
