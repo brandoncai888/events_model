@@ -1,4 +1,5 @@
 import argparse
+import math
 import re
 from pathlib import Path
 
@@ -247,12 +248,28 @@ def prediction_residuals(
     return residuals[[col for col in columns if col in residuals.columns]]
 
 
+def _normal_cdf(x, mean, std_dev):
+    z = (x - mean) / (std_dev * np.sqrt(2.0))
+    return 0.5 * (1.0 + np.array([math.erf(value) for value in z]))
+
+
+def _zero_centered_gaussian_counts(values, bin_edges):
+    sigma = float(np.sqrt(np.mean(values ** 2)))
+    if sigma <= 0 or not np.isfinite(sigma):
+        return None, None
+
+    expected_counts = len(values) * (
+        _normal_cdf(bin_edges[1:], 0.0, sigma)
+        - _normal_cdf(bin_edges[:-1], 0.0, sigma)
+    )
+    return expected_counts, sigma
+
+
 def plot_residual_distribution(residuals, output_base, bins=100, min_residual=None, max_residual=None, show=True):
     valid = residuals["residual_t"].to_numpy(dtype=float)
     valid = valid[np.isfinite(valid)]
     if len(valid) == 0:
         raise ValueError("No valid residuals to plot.")
-    mean_residual = float(np.mean(valid))
 
     speeds = residuals["velocity_component_pixels_per_s"].to_numpy(dtype=float)
     speeds = speeds[np.isfinite(speeds)]
@@ -270,9 +287,25 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
     else:
         hist_range = None
 
+    mean_residual = float(np.mean(valid))
+    hist_values, bin_edges = np.histogram(valid, bins=bins, range=hist_range)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    expected_gaussian_counts = np.full_like(hist_values, np.nan, dtype=float)
+    expected_counts, gaussian_sigma = _zero_centered_gaussian_counts(valid, bin_edges)
+    if expected_counts is not None:
+        expected_gaussian_counts = expected_counts
+
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.hist(valid, bins=bins, range=hist_range, color="steelblue", edgecolor="black", alpha=0.85)
-    ax.axvline(0.0, color="orange", linestyle="--", linewidth=2, label="perfect prediction")
+    ax.hist(valid, bins=bin_edges, color="steelblue", edgecolor="black", alpha=0.85, label=f"data (n={len(valid):,})")
+    if expected_counts is not None:
+        ax.plot(
+            bin_centers,
+            expected_counts,
+            color="orange",
+            linestyle="--",
+            linewidth=2,
+            label=f"zero-centered Gaussian (sigma={gaussian_sigma:.3g}s)",
+        )
     ax.axvline(
         mean_residual,
         color="crimson",
@@ -293,13 +326,13 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
     output_base = Path(output_base)
     output_base.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(str(output_base) + ".png", dpi=300, bbox_inches="tight")
-    hist_values, bin_edges = np.histogram(valid, bins=bins, range=hist_range)
     pd.DataFrame(
         {
             "bin": np.arange(len(hist_values)),
             "left": bin_edges[:-1],
             "right": bin_edges[1:],
             "count": hist_values,
+            "expected_gaussian_count": expected_gaussian_counts,
         }
     ).to_csv(str(output_base) + ".csv", index=False)
     if show:

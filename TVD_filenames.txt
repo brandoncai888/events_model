@@ -6,20 +6,3 @@ data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line2_iet_pdf_exponential_lin.
 data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line3_iet_pdf_exponential_lin.png
 data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line4_iet_pdf_exponential_lin.png
 
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_iet_pdf_lognormal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line1_iet_pdf_lognormal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line2_iet_pdf_lognormal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line3_iet_pdf_lognormal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line4_iet_pdf_lognormal_lin.png
-
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_iet_pdf_inverse_gaussian_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line1_iet_pdf_inverse_gaussian_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line2_iet_pdf_inverse_gaussian_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line3_iet_pdf_inverse_gaussian_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line4_iet_pdf_inverse_gaussian_lin.png
-
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_iet_pdf_normal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line1_iet_pdf_normal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line2_iet_pdf_normal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line3_iet_pdf_normal_lin.png
-data\object\60\1.05_1.07\pictures\60_1.05_1.07_ON_line4_iet_pdf_normal_lin.png
