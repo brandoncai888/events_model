@@ -6,19 +6,44 @@ from pathlib import Path
 import file_manager as fm
 
 
+TVD_COLUMN_PAIRS = (
+    ("data", "expected"),
+    ("count", "expected_gaussian_count"),
+)
+
+
+def tvd_columns(df):
+    for data_column, expected_column in TVD_COLUMN_PAIRS:
+        if data_column in df.columns and expected_column in df.columns:
+            return data_column, expected_column
+    expected = " or ".join(f"{data}/{expected}" for data, expected in TVD_COLUMN_PAIRS)
+    available = ", ".join(df.columns)
+    raise ValueError(f"CSV must contain one of these column pairs: {expected}. Found: {available}")
+
+
 def calculate_tvd(df):
     ## assume each row has equal weight
     total_rows = len(df)
     if total_rows == 0:
         print("DataFrame is empty. Cannot calculate TVD.")
         return None
-    
-    data_total = df['data'].sum()
-    expected_total = df['expected'].sum()   
-    df['data_norm'] = df['data'] / data_total
-    df['expected_norm'] = df['expected'] / expected_total
+
+    data_column, expected_column = tvd_columns(df)
+    values = df[[data_column, expected_column]].apply(pd.to_numeric, errors="coerce").dropna()
+    if values.empty:
+        print(f"No numeric values found in {data_column}/{expected_column}. Cannot calculate TVD.")
+        return None
+
+    data_total = values[data_column].sum()
+    expected_total = values[expected_column].sum()
+    if data_total == 0 or expected_total == 0:
+        print(f"Zero total in {data_column}/{expected_column}. Cannot calculate TVD.")
+        return None
+
+    values['data_norm'] = values[data_column] / data_total
+    values['expected_norm'] = values[expected_column] / expected_total
     tvd = 0 
-    for row in df.itertuples():
+    for row in values.itertuples():
         tvd += abs(row.data_norm - row.expected_norm)
     tvd = tvd / 2
     return tvd
@@ -98,8 +123,12 @@ def main():
             max_file_len = max(max_file_len, len(filename))
             continue
 
-        df = pd.read_csv(csv_filename)
-        tvd = calculate_tvd(df)
+        try:
+            df = pd.read_csv(csv_filename)
+            tvd = calculate_tvd(df)
+        except ValueError as err:
+            print(f"Skipping {csv_filename}: {err}")
+            tvd = None
         tvd_values.append(tvd)
         max_file_len = max(max_file_len, len(filename))
     with open(args.output, 'w') as f:

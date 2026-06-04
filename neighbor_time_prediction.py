@@ -167,6 +167,18 @@ def add_event_count_columns(predictions, events):
     return predictions
 
 
+def indexed_pixel_events(events):
+    indexed = events.assign(
+        event_x=np.rint(events["x"]).astype(int),
+        event_y=np.rint(events["y"]).astype(int),
+    ).copy()
+    indexed = indexed.sort_values(["event_x", "event_y", "t"]).reset_index(drop=True)
+    pixel_groups = indexed.groupby(["event_x", "event_y"])
+    indexed["event_index"] = pixel_groups.cumcount()
+    indexed["event_count"] = pixel_groups["t"].transform("size")
+    return indexed
+
+
 def add_actual_neighbor_times(predictions, events):
     lookup = pixel_time_lookup(events)
     actual_times = np.full(len(predictions), np.nan, dtype=float)
@@ -193,6 +205,34 @@ def add_actual_neighbor_times(predictions, events):
     return predictions
 
 
+def add_index_matched_neighbor_times(predictions, events):
+    indexed = indexed_pixel_events(events)
+    source_indexes = indexed[["event_x", "event_y", "t", "event_index", "event_count"]]
+    target_indexes = indexed[["event_x", "event_y", "event_index", "t", "event_count"]].rename(
+        columns={
+            "event_x": "target_x",
+            "event_y": "target_y",
+            "t": "actual_t",
+            "event_count": "target_event_count",
+        }
+    )
+
+    predictions = predictions.copy()
+    if "event_count" in predictions.columns:
+        predictions = predictions.drop(columns=["event_count"])
+    predictions = predictions.merge(source_indexes, on=["event_x", "event_y", "t"], how="left")
+    predictions = predictions.merge(target_indexes, on=["target_x", "target_y", "event_index"], how="left")
+    predictions = predictions[
+        predictions["event_count"].notna()
+        & predictions["target_event_count"].notna()
+        & (predictions["event_count"] == predictions["target_event_count"])
+        & predictions["actual_t"].notna()
+    ].copy()
+    predictions["actual_dt"] = predictions["actual_t"] - predictions["t"]
+    predictions["residual_t"] = predictions["actual_dt"] - predictions["predicted_dt"]
+    return predictions
+
+
 def prediction_residuals(
     events,
     velocities,
@@ -203,6 +243,7 @@ def prediction_residuals(
     dy=None,
     min_speed=1e-9,
     require_above_equal_events=False,
+    match_index=False,
 ):
     events_with_velocity = attach_velocity_windows(events, velocities)
     predictions = add_neighbor_predictions(
@@ -221,7 +262,10 @@ def prediction_residuals(
             & predictions["above_event_count"].notna()
             & (predictions["event_count"] == predictions["above_event_count"])
         ].copy()
-    residuals = add_actual_neighbor_times(predictions, events)
+    if match_index:
+        residuals = add_index_matched_neighbor_times(predictions, events)
+    else:
+        residuals = add_actual_neighbor_times(predictions, events)
     columns = [
         "window_index",
         "start_t",
@@ -236,8 +280,10 @@ def prediction_residuals(
         "neighbor_dy",
         "target_x",
         "target_y",
+        "event_index",
         "event_count",
         "above_event_count",
+        "target_event_count",
         "velocity_component_pixels_per_s",
         "predicted_dt",
         "predicted_t",
@@ -454,6 +500,11 @@ def main():
         action="store_true",
         help="Only calculate residuals for pixels whose above neighbor has the same total event count.",
     )
+    parser.add_argument(
+        "--match_index",
+        action="store_true",
+        help="Match source and neighbor events by event index after requiring equal source/neighbor event counts.",
+    )
     parser.add_argument("--bins", type=int, default=100, help="Histogram bins.")
     parser.add_argument("--min_residual", type=float, default=-0.001, help="Minimum residual to plot.")
     parser.add_argument("--max_residual", type=float, default=None, help="Maximum residual to plot.")
@@ -502,6 +553,7 @@ def main():
         dy=args.dy,
         min_speed=args.min_speed,
         require_above_equal_events=args.require_above_equal_events,
+        match_index=args.match_index,
     )
     if residuals.empty:
         raise ValueError("No neighbor timing residuals were generated. Check velocity direction, line, and event density.")
