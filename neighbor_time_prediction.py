@@ -299,16 +299,17 @@ def _normal_cdf(x, mean, std_dev):
     return 0.5 * (1.0 + np.array([math.erf(value) for value in z]))
 
 
-def _zero_centered_gaussian_counts(values, bin_edges):
-    sigma = float(np.sqrt(np.mean(values ** 2)))
-    if sigma <= 0 or not np.isfinite(sigma):
-        return None, None
+def _gaussian_counts(values, bin_edges):
+    mean = float(np.mean(values))
+    std_dev = float(np.std(values))
+    if std_dev <= 0 or not np.isfinite(std_dev):
+        return None, None, None
 
     expected_counts = len(values) * (
-        _normal_cdf(bin_edges[1:], 0.0, sigma)
-        - _normal_cdf(bin_edges[:-1], 0.0, sigma)
+        _normal_cdf(bin_edges[1:], mean, std_dev)
+        - _normal_cdf(bin_edges[:-1], mean, std_dev)
     )
-    return expected_counts, sigma
+    return expected_counts, mean, std_dev
 
 
 def plot_residual_distribution(residuals, output_base, bins=100, min_residual=None, max_residual=None, show=True):
@@ -337,7 +338,7 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
     hist_values, bin_edges = np.histogram(valid, bins=bins, range=hist_range)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     expected_gaussian_counts = np.full_like(hist_values, np.nan, dtype=float)
-    expected_counts, gaussian_sigma = _zero_centered_gaussian_counts(valid, bin_edges)
+    expected_counts, gaussian_mean, gaussian_std_dev = _gaussian_counts(valid, bin_edges)
     if expected_counts is not None:
         expected_gaussian_counts = expected_counts
 
@@ -350,7 +351,7 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
             color="orange",
             linestyle="--",
             linewidth=2,
-            label=f"zero-centered Gaussian (sigma={gaussian_sigma:.3g}s)",
+            label=f"Gaussian (mean={gaussian_mean:.3g}s, std={gaussian_std_dev:.3g}s)",
         )
     ax.axvline(
         mean_residual,
