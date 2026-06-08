@@ -4,3 +4,5 @@
 *.pkl
 *.mp4
 *.pyc
+data/egomotion/0/scene0.txt
+data/egomotion/1/scene1.txt
