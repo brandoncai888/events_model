@@ -304,6 +304,16 @@ def _logistic_cdf(x, location, scale):
     return 1.0 / (1.0 + np.exp(z))
 
 
+def _laplace_cdf(x, location, scale):
+    x = np.asarray(x, dtype=float)
+    z = (x - location) / scale
+    cdf = np.empty_like(z, dtype=float)
+    left = z < 0
+    cdf[left] = 0.5 * np.exp(np.clip(z[left], -700.0, 700.0))
+    cdf[~left] = 1.0 - 0.5 * np.exp(np.clip(-z[~left], -700.0, 700.0))
+    return cdf
+
+
 def _gaussian_counts(values, bin_edges):
     mean = float(np.mean(values))
     std_dev = float(np.std(values))
@@ -334,6 +344,19 @@ def _logistic_counts(values, bin_edges):
     return expected_counts, location, scale
 
 
+def _laplace_counts(values, bin_edges):
+    location = float(np.median(values))
+    scale = float(np.mean(np.abs(values - location)))
+    if scale <= 0 or not np.isfinite(scale):
+        return None, None, None
+
+    expected_counts = len(values) * (
+        _laplace_cdf(bin_edges[1:], location, scale)
+        - _laplace_cdf(bin_edges[:-1], location, scale)
+    )
+    return expected_counts, location, scale
+
+
 def _shape_counts(values, bin_edges, shape):
     if shape is None:
         return None, None
@@ -350,6 +373,13 @@ def _shape_counts(values, bin_edges, shape):
             return None, None
         return expected_counts, {
             "label": f"Logistic (location={location:.3g}s, scale={scale:.3g}s)",
+        }
+    if shape == "laplace":
+        expected_counts, location, scale = _laplace_counts(values, bin_edges)
+        if expected_counts is None:
+            return None, None
+        return expected_counts, {
+            "label": f"Laplace (location={location:.3g}s, scale={scale:.3g}s)",
         }
     raise ValueError(f"Unsupported shape: {shape}")
 
@@ -586,7 +616,7 @@ def main():
     parser.add_argument("--max_residual", type=float, default=None, help="Maximum residual to plot.")
     parser.add_argument(
         "--shape",
-        choices=["gaussian", "logistic"],
+        choices=["gaussian", "logistic", "laplace"],
         default=None,
         help="Overlay an automatically fitted distribution on the histogram.",
     )

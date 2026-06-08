@@ -1,0 +1,18 @@
+python combine_events.py --sources object egomotion --datasets 60 1 --slices 1.02_1.08 1.02_1.08 --width 346 --height 260 
+
+[Set 1/2]
+Loading events from: data\object\60\1.02_1.08\events\60_1.02_1.08.csv
+  Loaded 62,649 events, time range: 0.000000s to 0.059987s
+
+[Set 2/2]
+Loading events from: data\egomotion\1\1.02_1.08\events\1_1.02_1.08.csv
+  Loaded 144,915 events, time range: 0.000000s to 0.059776s
+
+--- Combining 2 event sets ---
+Combined total: 207,564 events
+Time range: 0.000000s to 0.059987s
+Filtered by width/height: 207,564 -> 95,582 events (width=346.0, height=260.0)
+
+✓ Combined events saved to: combined_events_object_60+egomotion_1.csv
+  Total events: 95,582
+  Columns: ['x', 'y', 't', 'p']

@@ -20,3 +20,8 @@ data\object\60\1.059_1.069\pictures\60_1.059_1.069_ON_line9_neighbor_time_residu
 data\object\60\1.059_1.069\pictures\60_1.059_1.069_ON_line10_neighbor_time_residual_0.001s_auto_y_gaussian_hist.png |  0.07313629398937163
 data\object\60\1.059_1.069\pictures\60_1.059_1.069_ON_line11_neighbor_time_residual_0.001s_auto_y_gaussian_hist.png |  0.06741780718296618
 data\object\60\1.059_1.069\pictures\60_1.059_1.069_ON_line12_neighbor_time_residual_0.001s_auto_y_gaussian_hist.png |  0.09625092563806839
+                                                                                                                    |  None
+                                                                                                                    |  None
+data\object\60\1.059_1.069\pictures\60_1.059_1.069_OFF_line2_neighbor_time_residual_0.001s_auto_y_gaussian_hist.png |  0.25345109125508825
+data\object\60\1.059_1.069\pictures\60_1.059_1.069_OFF_line2_neighbor_time_residual_0.001s_auto_y_logistic_hist.png |  0.2081663514966688
+data\object\60\1.059_1.069\pictures\60_1.059_1.069_OFF_line2_neighbor_time_residual_0.001s_auto_y_laplace_hist.png  |  0.09824301975887517
