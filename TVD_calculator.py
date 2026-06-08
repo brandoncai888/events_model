@@ -9,6 +9,7 @@ import file_manager as fm
 TVD_COLUMN_PAIRS = (
     ("data", "expected"),
     ("count", "expected_gaussian_count"),
+    ("count", "expected"),
 )
 
 

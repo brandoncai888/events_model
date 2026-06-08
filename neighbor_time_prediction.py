@@ -299,6 +299,11 @@ def _normal_cdf(x, mean, std_dev):
     return 0.5 * (1.0 + np.array([math.erf(value) for value in z]))
 
 
+def _logistic_cdf(x, location, scale):
+    z = np.clip(-(x - location) / scale, -700.0, 700.0)
+    return 1.0 / (1.0 + np.exp(z))
+
+
 def _gaussian_counts(values, bin_edges):
     mean = float(np.mean(values))
     std_dev = float(np.std(values))
@@ -312,21 +317,80 @@ def _gaussian_counts(values, bin_edges):
     return expected_counts, mean, std_dev
 
 
-def plot_residual_distribution(residuals, output_base, bins=100, min_residual=None, max_residual=None, show=True):
+def _logistic_counts(values, bin_edges):
+    location = float(np.mean(values))
+    std_dev = float(np.std(values))
+    if std_dev <= 0 or not np.isfinite(std_dev):
+        return None, None, None
+
+    scale = std_dev * np.sqrt(3.0) / np.pi
+    if scale <= 0 or not np.isfinite(scale):
+        return None, None, None
+
+    expected_counts = len(values) * (
+        _logistic_cdf(bin_edges[1:], location, scale)
+        - _logistic_cdf(bin_edges[:-1], location, scale)
+    )
+    return expected_counts, location, scale
+
+
+def _shape_counts(values, bin_edges, shape):
+    if shape is None:
+        return None, None
+    if shape == "gaussian":
+        expected_counts, mean, std_dev = _gaussian_counts(values, bin_edges)
+        if expected_counts is None:
+            return None, None
+        return expected_counts, {
+            "label": f"Gaussian (mean={mean:.3g}s, std={std_dev:.3g}s)",
+        }
+    if shape == "logistic":
+        expected_counts, location, scale = _logistic_counts(values, bin_edges)
+        if expected_counts is None:
+            return None, None
+        return expected_counts, {
+            "label": f"Logistic (location={location:.3g}s, scale={scale:.3g}s)",
+        }
+    raise ValueError(f"Unsupported shape: {shape}")
+
+
+def plot_residual_distribution(
+    residuals,
+    output_base,
+    bins=100,
+    min_residual=None,
+    max_residual=None,
+    shape=None,
+    log_counts=False,
+    log_residuals=False,
+    show=True,
+):
     valid = residuals["residual_t"].to_numpy(dtype=float)
     valid = valid[np.isfinite(valid)]
     if len(valid) == 0:
         raise ValueError("No valid residuals to plot.")
+
+    if log_residuals:
+        valid = np.abs(valid)
+        valid = valid[valid > 0]
+        if len(valid) == 0:
+            raise ValueError("No positive residuals remain for logarithmic residual plotting.")
 
     speeds = residuals["velocity_component_pixels_per_s"].to_numpy(dtype=float)
     speeds = speeds[np.isfinite(speeds)]
     mean_speed = float(np.mean(speeds)) if len(speeds) > 0 else float("nan")
 
     if min_residual is not None or max_residual is not None:
-        lower = np.min(valid) if min_residual is None else min_residual
-        upper = np.max(valid) if max_residual is None else max_residual
-        if upper <= lower:
-            raise ValueError("Residual plot range is empty; check --min_residual and --max_residual.")
+        if log_residuals:
+            lower = np.min(valid) if min_residual is None or min_residual <= 0 else min_residual
+            upper = np.max(valid) if max_residual is None else max_residual
+            if upper <= lower:
+                raise ValueError("Residual plot range is empty; check --min_residual and --max_residual.")
+        else:
+            lower = np.min(valid) if min_residual is None else min_residual
+            upper = np.max(valid) if max_residual is None else max_residual
+            if upper <= lower:
+                raise ValueError("Residual plot range is empty; check --min_residual and --max_residual.")
         valid = valid[(valid >= lower) & (valid <= upper)]
         if len(valid) == 0:
             raise ValueError("No residuals remain inside the requested plot range.")
@@ -337,10 +401,10 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
     mean_residual = float(np.mean(valid))
     hist_values, bin_edges = np.histogram(valid, bins=bins, range=hist_range)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-    expected_gaussian_counts = np.full_like(hist_values, np.nan, dtype=float)
-    expected_counts, gaussian_mean, gaussian_std_dev = _gaussian_counts(valid, bin_edges)
+    expected_counts, shape_info = _shape_counts(valid, bin_edges, shape)
+    expected_shape_counts = np.full_like(hist_values, np.nan, dtype=float)
     if expected_counts is not None:
-        expected_gaussian_counts = expected_counts
+        expected_shape_counts = expected_counts
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.hist(valid, bins=bin_edges, color="steelblue", edgecolor="black", alpha=0.85, label=f"data (n={len(valid):,})")
@@ -351,7 +415,7 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
             color="orange",
             linestyle="--",
             linewidth=2,
-            label=f"Gaussian (mean={gaussian_mean:.3g}s, std={gaussian_std_dev:.3g}s)",
+            label=shape_info["label"],
         )
     ax.axvline(
         mean_residual,
@@ -364,8 +428,13 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
         "Neighbor Event Timing Residuals\n"
         f"Mean projected speed: {mean_speed:.3g} pixels/s ({(1/mean_speed) if mean_speed > 0 else float('nan'):.3g} seconds between neighbors)"
     )
-    ax.set_xlabel("actual_dt - predicted_dt (seconds)")
+    x_label = "|actual_dt - predicted_dt| (seconds)" if log_residuals else "actual_dt - predicted_dt (seconds)"
+    ax.set_xlabel(x_label)
     ax.set_ylabel("Count")
+    if log_counts:
+        ax.set_yscale("log")
+    if log_residuals:
+        ax.set_xscale("log")
     ax.grid(True, alpha=0.3)
     ax.legend()
     plt.tight_layout()
@@ -379,7 +448,7 @@ def plot_residual_distribution(residuals, output_base, bins=100, min_residual=No
             "left": bin_edges[:-1],
             "right": bin_edges[1:],
             "count": hist_values,
-            "expected_gaussian_count": expected_gaussian_counts,
+            "expected": expected_shape_counts,
         }
     ).to_csv(str(output_base) + ".csv", index=False)
     if show:
@@ -391,6 +460,12 @@ def neighbor_label(args):
     if args.dx is not None or args.dy is not None:
         return f"dx{0 if args.dx is None else args.dx}_dy{0 if args.dy is None else args.dy}"
     return f"auto_{args.axis}"
+
+
+def histogram_label(output_name, shape):
+    if shape is None:
+        return f"{output_name}_hist"
+    return f"{output_name}_{shape}_hist"
 
 
 def stem_without_line(stem):
@@ -459,7 +534,7 @@ def resolve_paths(args, source, dataset, slice_name, event_stem):
         plot_output = Path(args.plot_output)
     else:
         plot_output = fm.picture_base(
-            f"{output_name}_hist",
+            histogram_label(output_name, args.shape),
             data_root=args.data_root,
             source=source,
             dataset=dataset,
@@ -509,6 +584,18 @@ def main():
     parser.add_argument("--bins", type=int, default=100, help="Histogram bins.")
     parser.add_argument("--min_residual", type=float, default=-0.001, help="Minimum residual to plot.")
     parser.add_argument("--max_residual", type=float, default=None, help="Maximum residual to plot.")
+    parser.add_argument(
+        "--shape",
+        choices=["gaussian", "logistic"],
+        default=None,
+        help="Overlay an automatically fitted distribution on the histogram.",
+    )
+    parser.add_argument("--log_counts", action="store_true", help="Use logarithmic y-scale for histogram counts.")
+    parser.add_argument(
+        "--log_residuals",
+        action="store_true",
+        help="Plot the absolute residual values on a logarithmic x-scale.",
+    )
     parser.add_argument("--output", type=str, default=None, help="Explicit output CSV for per-event residuals.")
     parser.add_argument("--plot_output", type=str, default=None, help="Explicit plot base path, without extension.")
     parser.add_argument("--no_show", action="store_true", help="Suppress showing the histogram.")
@@ -567,6 +654,9 @@ def main():
         bins=args.bins,
         min_residual=args.min_residual,
         max_residual=args.max_residual,
+        shape=args.shape,
+        log_counts=args.log_counts,
+        log_residuals=args.log_residuals,
         show=not args.no_show,
     )
 
