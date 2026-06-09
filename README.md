@@ -37,6 +37,10 @@ Track event center-of-mass motion in 1 ms windows:
 
 This writes COM snapshot and velocity CSVs under the managed <code>tracks</code> folder. Velocity is reported as <code>vx_pixels_per_s</code>, <code>vy_pixels_per_s</code>, and <code>speed_pixels_per_s</code>.
 
+Create a video of average event-count heatmaps in 8x8 pixel bins over small time windows:
+
+<code>python temporal_counts.py --source object --dataset 45 --slice 2.67_2.71 --polarity ON --window 0.001 --size 8 --fps 30 --data_root data --no_show</code>
+
 Use COM velocity to predict neighboring-pixel event timing and plot residuals:
 
 <code>python neighbor_time_prediction.py --source object --dataset 45 --slice 2.67_2.71 --polarity ON --window 0.001 --axis x --data_root data</code>
