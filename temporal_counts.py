@@ -80,7 +80,7 @@ def save_temporal_count_video(
     title,
     show=True,
 ):
-    """Create an MP4 of average event-count heatmaps over time."""
+    """Create an MP4 of average event-count heatmaps over time. Returns maps and windows."""
     print(f"Preparing {window:g}s count windows from t={start_t:g}s to t={end_t:g}s...")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -138,6 +138,38 @@ def save_temporal_count_video(
         plt.show()
     plt.close(fig)
 
+    return maps, windows
+
+
+def resolve_end_time(df, start_t, duration):
+    if duration is None or np.isinf(duration):
+        return float(df["t"].max())
+    return start_t + duration
+
+
+def save_temporal_counts_data(maps, windows, output_path, *, size, window, width, height):
+    """Save temporal count maps and metadata as numpy archive."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Extract time information
+    times = np.array([[t0, t1] for t0, t1, _ in windows], dtype=float)
+    
+    # Stack maps into a single 3D array
+    maps_array = np.stack(maps, axis=0)
+    
+    # Save as npz
+    np.savez(
+        output_path,
+        maps=maps_array,
+        times=times,
+        size=size,
+        window=window,
+        width=width,
+        height=height,
+    )
+    print(f"Saved temporal counts data to {output_path}")
+
 
 def save_delta_temporal_count_video(
     maps,
@@ -152,7 +184,7 @@ def save_delta_temporal_count_video(
     title,
     show=True,
 ):
-    """Create an MP4 showing the change in average event-count over time."""
+    """Create an MP4 showing the change in average event-count over time. Returns delta maps."""
     print(f"Preparing delta maps (change per window)...")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -222,11 +254,31 @@ def save_delta_temporal_count_video(
         plt.show()
     plt.close(fig)
 
+    return delta_maps
 
-def resolve_end_time(df, start_t, duration):
-    if duration is None or np.isinf(duration):
-        return float(df["t"].max())
-    return start_t + duration
+
+def save_delta_temporal_counts_data(delta_maps, windows, output_path, *, size, window, width, height):
+    """Save delta temporal count maps and metadata as numpy archive."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Extract time information
+    times = np.array([[t0, t1] for t0, t1, _ in windows], dtype=float)
+    
+    # Stack maps into a single 3D array
+    delta_maps_array = np.stack(delta_maps, axis=0)
+    
+    # Save as npz
+    np.savez(
+        output_path,
+        delta_maps=delta_maps_array,
+        times=times,
+        size=size,
+        window=window,
+        width=width,
+        height=height,
+    )
+    print(f"Saved delta temporal counts data to {output_path}")
 
 
 if __name__ == "__main__":
@@ -313,13 +365,12 @@ if __name__ == "__main__":
             line=output_line,
             create_parent=True,
         )
-        print(output_path)
 
     title = f"Average Event Count Heatmap | {csv_path.name}"
     if args.polarity:
         title += f" | Polarity: {args.polarity}"
 
-    save_temporal_count_video(
+    maps, windows = save_temporal_count_video(
         df,
         output_path,
         width=args.width,
@@ -333,13 +384,22 @@ if __name__ == "__main__":
         show=not args.no_show,
     )
 
-    # Generate delta video
-    windows = frame_windows(df, args.start, end_t, args.window)
-    maps = [binned_average_count_map(frame_df, args.width, args.height, args.size) for _, _, frame_df in windows]
-    
+    # Save temporal counts data
+    data_output_path = Path(str(output_path).replace(".mp4", ".npz"))
+    save_temporal_counts_data(
+        maps,
+        windows,
+        data_output_path,
+        size=args.size,
+        window=args.window,
+        width=args.width,
+        height=args.height,
+    )
+
+    # Generate and save delta video
     delta_output_path = Path(str(output_path).replace("temporal_counts", "delta_temporal_counts"))
     delta_title = title.replace("Average Event Count", "Delta (Change in Event Count)")
-    save_delta_temporal_count_video(
+    delta_maps = save_delta_temporal_count_video(
         maps,
         windows,
         delta_output_path,
@@ -350,4 +410,16 @@ if __name__ == "__main__":
         fps=args.fps,
         title=delta_title,
         show=not args.no_show,
+    )
+
+    # Save delta temporal counts data
+    delta_data_output_path = Path(str(delta_output_path).replace(".mp4", ".npz"))
+    save_delta_temporal_counts_data(
+        delta_maps,
+        windows,
+        delta_data_output_path,
+        size=args.size,
+        window=args.window,
+        width=args.width,
+        height=args.height,
     )
