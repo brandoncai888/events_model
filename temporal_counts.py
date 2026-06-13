@@ -50,19 +50,32 @@ def binned_average_count_map(df, width, height, size):
     return count_map / bin_areas
 
 
-def frame_windows(df, start_t, end_t, window):
-    """Build time windows and per-window event slices."""
+def frame_windows(df, start_t, end_t, window, increment=None):
+    """Build time windows and per-window event slices.
+    
+    Args:
+        df: Event dataframe
+        start_t: Start time in seconds
+        end_t: End time in seconds
+        window: Time window size in seconds
+        increment: Time increment between windows in seconds. If None, defaults to window (non-overlapping).
+    """
     if window <= 0:
         raise ValueError("--window must be positive.")
     if end_t <= start_t:
         raise ValueError("End time must be greater than start time.")
+    
+    if increment is None:
+        increment = window
+    if increment <= 0:
+        raise ValueError("--increment must be positive.")
 
-    frame_count = max(1, int(np.ceil((end_t - start_t) / window)))
     windows = []
-    for frame_idx in range(frame_count):
-        t0 = start_t + frame_idx * window
+    t0 = start_t
+    while t0 < end_t:
         t1 = min(t0 + window, end_t)
         windows.append((t0, t1, df[(df["t"] >= t0) & (df["t"] < t1)]))
+        t0 += increment
     return windows
 
 
@@ -78,6 +91,7 @@ def save_temporal_count_video(
     window,
     fps,
     title,
+    increment=None,
     show=True,
 ):
     """Create an MP4 of average event-count heatmaps over time. Returns maps and windows."""
@@ -85,7 +99,7 @@ def save_temporal_count_video(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    windows = frame_windows(df, start_t, end_t, window)
+    windows = frame_windows(df, start_t, end_t, window, increment=increment)
     maps = [binned_average_count_map(frame_df, width, height, size) for _, _, frame_df in windows]
     max_average = max(float(count_map.max()) for count_map in maps)
     print(f"Prepared {len(maps):,} frames. Max average events per pixel in any {size}x{size} bin: {max_average:g}")
@@ -281,6 +295,174 @@ def save_delta_temporal_counts_data(delta_maps, windows, output_path, *, size, w
     print(f"Saved delta temporal counts data to {output_path}")
 
 
+def save_velocity_video(
+    maps,
+    windows,
+    output_path,
+    *,
+    width,
+    height,
+    size,
+    window,
+    patch_size,
+    increment=None,
+    fps,
+    title,
+    show=True,
+):
+    """
+    Apply Local Optical Flow Constraint Residual (LOFCR) estimation to cancel egomotion
+    and render the output animation stream. Returns velocity/lofcr maps.
+    
+    Args:
+        increment: Time increment between windows in seconds. Used for display purposes.
+    """
+    print(f"Calculating Velocity maps (patch={patch_size}x{patch_size})...")
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    num_frames = len(maps)
+    bin_height, bin_width = maps[0].shape
+    lofcr_maps = []
+
+    # Calculate temporal gradients (symmetric central differences where possible)
+    m_t_all = []
+    for i in range(num_frames):
+        if num_frames <= 1:
+            mt = np.zeros_like(maps[0])
+        elif i == 0:
+            mt = (maps[1] - maps[0]) / window
+        elif i == num_frames - 1:
+            mt = (maps[-1] - maps[-2]) / window
+        else:
+            mt = (maps[i + 1] - maps[i - 1]) / (2 * window)
+        m_t_all.append(mt)
+
+    half_p = patch_size // 2
+
+    for i in range(num_frames):
+        count_map = maps[i]
+        mt = m_t_all[i]
+
+        # Calculate spatial gradients for the current binned map frame
+        my, mx = np.gradient(count_map)
+
+        # Precompute element-wise products for the linear system components
+        Ixx = mx * mx
+        Iyy = my * my
+        Ixy = mx * my
+        Ixt = mx * mt
+        Iyt = my * mt
+
+        residual_map = np.zeros_like(count_map)
+
+        # Slide across each individual macro-block spatial bin configuration
+        for r in range(bin_height):
+            for c in range(bin_width):
+                r_start = max(0, r - half_p)
+                r_end = min(bin_height, r + half_p + 1)
+                c_start = max(0, c - half_p)
+                c_end = min(bin_width, c + half_p + 1)
+
+                # Compute patch sums for our normal matrix configuration
+                Sxx = np.sum(Ixx[r_start:r_end, c_start:c_end])
+                Syy = np.sum(Iyy[r_start:r_end, c_start:c_end])
+                Sxy = np.sum(Ixy[r_start:r_end, c_start:c_end])
+                Sxt = np.sum(Ixt[r_start:r_end, c_start:c_end])
+                Syt = np.sum(Iyt[r_start:r_end, c_start:c_end])
+
+                # Use analytical Cramer's rule to extract local velocity parameterization
+                det = Sxx * Syy - Sxy * Sxy
+                if det > 1e-5:
+                    vx = (Syt * Sxy - Sxt * Syy) / det
+                    vy = (Sxy * Sxt - Sxx * Syt) / det
+                else:
+                    vx, vy = 0.0, 0.0
+
+                # Compute the structural constraint deviation at the focal macro-block node
+                residual_map[r, c] = np.abs(mx[r, c] * vx + my[r, c] * vy + mt[r, c])
+
+        lofcr_maps.append(residual_map)
+
+    max_residual = max(float(rmap.max()) for rmap in lofcr_maps) if lofcr_maps else 1.0
+    if max_residual == 0:
+        max_residual = 1.0
+
+    print(f"Prepared {len(lofcr_maps):,} Velocity frames. Max Residual Value: {max_residual:g}")
+
+    fig, ax = plt.subplots(figsize=(12, 8), facecolor="black")
+    im = ax.imshow(
+        lofcr_maps[0],
+        cmap="inferno",
+        origin="upper",
+        interpolation="nearest",
+        extent=(0, width, height, 0),
+        vmin=0,
+        vmax=max_residual * 0.6,  # Squeeze the display threshold dynamically to make target bounds visually distinct
+    )
+
+    cbar = plt.colorbar(im, ax=ax, label=f"Velocity Deviation Anomaly Intensity ({patch_size}x{patch_size} Patch Setting)", pad=0.02)
+    cbar.ax.tick_params(colors="white")
+    cbar.ax.yaxis.label.set_color("white")
+
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, 0)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlabel("X coordinate", color="white")
+    ax.set_ylabel("Y coordinate", color="white")
+    ax.tick_params(colors="white")
+    ax.set_facecolor("black")
+    title_obj = ax.set_title("", color="white", fontsize=14, pad=20)
+
+    def update(frame_idx):
+        t0, t1, _ = windows[frame_idx]
+        im.set_data(lofcr_maps[frame_idx])
+        title_obj.set_text(f"{title}\nt={t0:.6g}s to {t1:.6g}s | Velocity Egomotion Suppression Matrix")
+        print(
+            f"\rVelocity Heatmap | frame {frame_idx + 1:,}/{len(lofcr_maps):,} | "
+            f"t={t0:.6g}s to {t1:.6g}s",
+            end="",
+            flush=True,
+        )
+        return [im, title_obj]
+
+    ani = animation.FuncAnimation(fig, update, frames=len(lofcr_maps), interval=1000 / fps, blit=True)
+    plt.tight_layout()
+
+    print(f"Saving Velocity tracking video output to {output_path}...")
+    ani.save(output_path, writer="ffmpeg", fps=fps)
+    print()
+    print("Velocity video file written successfully.")
+
+    if show:
+        plt.show()
+    plt.close(fig)
+
+    return lofcr_maps
+
+
+def save_velocity_data(lofcr_maps, windows, output_path, *, size, window, patch_size, width, height, increment=None):
+    """Save velocity/LOFCR tracking data and parameter sets to disk as numpy archive."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    times = np.array([[t0, t1] for t0, t1, _ in windows], dtype=float)
+    lofcr_maps_array = np.stack(lofcr_maps, axis=0)
+    
+    np.savez(
+        output_path,
+        lofcr_maps=lofcr_maps_array,
+        times=times,
+        size=size,
+        window=window,
+        patch_size=patch_size,
+        width=width,
+        height=height,
+        increment=increment,
+    )
+    print(f"Saved velocity tracking data matrices to {output_path}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Create a video of binned event-count heatmaps over time."
@@ -304,8 +486,15 @@ if __name__ == "__main__":
     parser.add_argument("--fps", type=int, default=30, help="Frames per second for the output video.")
     parser.add_argument("--output", type=str, default=None, help="Custom output path for the MP4 video.")
     parser.add_argument("--no_show", action="store_true", help="Suppress showing the animation window.")
+    
+    # Added spatial window size option for LOFCR tracking estimation
+    parser.add_argument("--patch_size", type=int, default=3, help="Odd integer configuration for spatial calculation neighborhoods (e.g., 3 for a 3x3 patch layout).")
+    parser.add_argument("--increment", type=float, default=None, help="Time increment between consecutive windows in seconds. Defaults to window size for non-overlapping windows. Use smaller values for better time resolution.")
 
     args = parser.parse_args()
+
+    if args.patch_size % 2 == 0 or args.patch_size < 1:
+        raise ValueError("--patch_size argument configuration must represent a positive odd integer designation.")
 
     source_resolved = args.source or fm.SOURCE_NOISE
     filename = fm.find_events_file(
@@ -379,6 +568,7 @@ if __name__ == "__main__":
         start_t=args.start,
         end_t=end_t,
         window=args.window,
+        increment=args.increment,
         fps=args.fps,
         title=title,
         show=not args.no_show,
@@ -422,4 +612,36 @@ if __name__ == "__main__":
         window=args.window,
         width=args.width,
         height=args.height,
+    )
+
+    # Generate and save velocity/egomotion suppression layer video output
+    velocity_output_path = Path(str(output_path).replace("temporal_counts", f"velocity_counts_{args.patch_size}px"))
+    velocity_title = title.replace("Average Event Count", "Velocity Object Motion Tracking")
+    velocity_maps = save_velocity_video(
+        maps,
+        windows,
+        velocity_output_path,
+        width=args.width,
+        height=args.height,
+        size=args.size,
+        window=args.window,
+        patch_size=args.patch_size,
+        increment=args.increment,
+        fps=args.fps,
+        title=velocity_title,
+        show=not args.no_show,
+    )
+
+    # Save tracking analysis parameters matrix archive
+    velocity_data_output_path = Path(str(velocity_output_path).replace(".mp4", ".npz"))
+    save_velocity_data(
+        velocity_maps,
+        windows,
+        velocity_data_output_path,
+        size=args.size,
+        window=args.window,
+        patch_size=args.patch_size,
+        width=args.width,
+        height=args.height,
+        increment=args.increment,
     )
